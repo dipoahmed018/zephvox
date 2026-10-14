@@ -191,7 +191,7 @@ describe("helpers", () => {
 describe("WordInput", () => {
   it("opens practice for a typed word, tidying the spacing", async () => {
     render(<WordInput />);
-    const button = screen.getByRole("button", { name: /practise/i });
+    const button = screen.getByRole("button", { name: /practice/i });
     expect(button).toBeDisabled();
     await userEvent.type(screen.getByRole("textbox"), "  thorough   work ");
     await userEvent.click(button);
@@ -202,6 +202,6 @@ describe("WordInput", () => {
   it("needs at least one letter", async () => {
     render(<WordInput />);
     await userEvent.type(screen.getByRole("textbox"), "123 !");
-    expect(screen.getByRole("button", { name: /practise/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /practice/i })).toBeDisabled();
   });
 });

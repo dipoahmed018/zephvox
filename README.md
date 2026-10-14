@@ -113,12 +113,12 @@ speakcheck serve --open                  # http://127.0.0.1:8765  (in a git chec
 
 `serve` starts a local daemon: it keeps the models loaded, owns the microphone, registers global
 shortcuts and serves the page. The **browser never records**. It shows live feedback and lets you
-practise, and the engine does the recording.
+practice, and the engine does the recording.
 
 - **Record**: press **Ctrl+Shift+Alt+R** anywhere (or the big button), speak, press again. The page shows a
   live level meter, then the analysis progress, then opens the report.
 - **Report**: your transcript with mistakes highlighted (teal = pronunciation, amber = grammar). Click
-  one to hear your own word, hear it said correctly, practise it, or mark it "not a mistake".
+  one to hear your own word, hear it said correctly, practice it, or mark it "not a mistake".
 - **Practice**: hear the word, press **Ctrl+Shift+Alt+P** (or click) and say it. Recording stops by itself
   when you stop talking. You get a 0–100 score, every sound colored right or wrong, and a mouth tip.
   Repeat until it passes.

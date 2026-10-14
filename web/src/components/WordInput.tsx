@@ -4,7 +4,7 @@ import { navigate } from "../router";
 
 const MAX_LENGTH = 100;
 
-/** Type any word or short sentence to practise it. */
+/** Type any word or short sentence to practice it. */
 export function WordInput({ autoFocus = false }: { autoFocus?: boolean }) {
   const [text, setText] = useState("");
   const clean = text.trim().replace(/\s+/g, " ");
@@ -22,7 +22,7 @@ export function WordInput({ autoFocus = false }: { autoFocus?: boolean }) {
     >
       <input
         className="input"
-        aria-label="Word or sentence to practise"
+        aria-label="Word or sentence to practice"
         placeholder="Type a word…"
         maxLength={MAX_LENGTH}
         autoFocus={autoFocus}
@@ -30,7 +30,7 @@ export function WordInput({ autoFocus = false }: { autoFocus?: boolean }) {
         onChange={(e) => setText(e.target.value)}
       />
       <button className="btn primary small" type="submit" disabled={!valid}>
-        <Target size={15} /> Practise
+        <Target size={15} /> Practice
       </button>
     </form>
   );

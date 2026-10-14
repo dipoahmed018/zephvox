@@ -59,7 +59,7 @@ export function FindingCard({ finding: f, sessionId, sentenceSpan, dismissed, on
       </div>
       <div className="actions">
         <button className="btn primary small" onClick={() => onPractice(pron ? f.target : fixed, pron ? f.time_span : sentenceSpan)}>
-          <Target size={15} /> Practise {pron ? "this word" : "this sentence"}
+          <Target size={15} /> Practice {pron ? "this word" : "this sentence"}
         </button>
         <button className="btn ghost small" onClick={onToggleDismiss}>
           {dismissed ? <RotateCcw size={15} /> : <ThumbsDown size={15} />}

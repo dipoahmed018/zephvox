@@ -57,7 +57,7 @@ export function Progress() {
       </div>
       <div className="grid-2">
         <div className="card">
-          <h2 style={{ marginBottom: 14 }}>Words to practise</h2>
+          <h2 style={{ marginBottom: 14 }}>Words to practice</h2>
           {weak.length === 0 ? (
             <p className="muted">Nothing outstanding — all recent words passed.</p>
           ) : (

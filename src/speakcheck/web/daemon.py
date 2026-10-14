@@ -199,7 +199,7 @@ class Daemon:
         meta: dict[str, Any] = {}
         if mode == "practice":
             if not self.practice_target:
-                raise RecordingError("Pick a word to practise first")
+                raise RecordingError("Pick a word to practice first")
             meta = dict(self.practice_target)
             backend = self.backend  # fail now (e.g. not connected) rather than after recording
         else:

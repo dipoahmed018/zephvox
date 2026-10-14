@@ -66,7 +66,7 @@ export function Report({ id }: { id?: string }) {
     if (next) setData({ result, feedback: next });
   };
 
-  const practise = (text: string, span?: Span | null) =>
+  const practice = (text: string, span?: Span | null) =>
     navigate("practice", undefined, {
       w: text,
       s: sessionId,
@@ -162,12 +162,12 @@ export function Report({ id }: { id?: string }) {
               sentenceSpan={sentenceSpan}
               dismissed={dismissed(selected!)}
               onToggleDismiss={() => toggleDismiss(selected!)}
-              onPractice={practise}
+              onPractice={practice}
             />
           ) : (
             <div className="card empty">
               <MousePointerClick size={30} />
-              <p>Click a highlighted word to see what went wrong and practise it.</p>
+              <p>Click a highlighted word to see what went wrong and practice it.</p>
             </div>
           )}
         </aside>

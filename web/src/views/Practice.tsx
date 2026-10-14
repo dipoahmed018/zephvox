@@ -61,7 +61,7 @@ export function Practice({ route }: { route: Route }) {
         </div>
         <div className="card empty">
           <Target size={36} />
-          <p>{weak === null ? "Loading…" : "Type a word to practise, or record yourself and your weak words will appear here."}</p>
+          <p>{weak === null ? "Loading…" : "Type a word to practice, or record yourself and your weak words will appear here."}</p>
           <WordInput autoFocus />
           <button className="btn" onClick={() => navigate("home")}>
             Record yourself
@@ -194,7 +194,7 @@ export function Practice({ route }: { route: Route }) {
 
         <aside className="stack">
           <div className="card">
-            <h2 style={{ marginBottom: 10 }}>Practise any word</h2>
+            <h2 style={{ marginBottom: 10 }}>Practice any word</h2>
             <WordInput />
           </div>
           <div className="card">

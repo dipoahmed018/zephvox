@@ -33,7 +33,7 @@ def desktop_entry(python: str, icon: Path) -> str:
         "Type=Application",
         "Name=speakcheck",
         "GenericName=Spoken English coach",
-        "Comment=Find and practise your pronunciation and grammar mistakes",
+        "Comment=Find and practice your pronunciation and grammar mistakes",
         f"Exec={exec_line}",
         f"Icon={icon}",
         "Terminal=false",
@@ -85,7 +85,7 @@ def install_windows(python: str) -> Path:
         f"$s.TargetPath = {ps_quote(python)}",
         "$s.Arguments = '-m speakcheck.cli serve --open'",
         f"$s.WorkingDirectory = {ps_quote(Path(python).parent)}",
-        "$s.Description = 'Find and practise your pronunciation and grammar mistakes'",
+        "$s.Description = 'Find and practice your pronunciation and grammar mistakes'",
         "$s.Save()",
     ])  # fmt: skip
     subprocess.run(["powershell", "-NoProfile", "-Command", script], check=True, capture_output=True)
