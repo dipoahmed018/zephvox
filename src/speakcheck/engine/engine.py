@@ -80,9 +80,9 @@ class Engine:
     def _services(self) -> Services:
         return Services(caps=self.caps, build=self.build_provider)
 
-    def build_provider(self, kind: str, name: str) -> Provider:
+    def build_provider(self, kind: str, name: str, overrides: dict[str, Any] | None = None) -> Provider:
         cls = self.registry.get(kind, name)
-        return cls(self.config.provider_settings(name), self._services())
+        return cls({**self.config.provider_settings(name), **(overrides or {})}, self._services())
 
     def provider(self, kind: str) -> Provider:
         """The first available provider from the configured preference list (cached)."""
@@ -330,6 +330,14 @@ class Engine:
     def practice(self, target: str, source: Recording | Path | str,
                  source_session: str | None = None) -> PracticeAttempt:  # fmt: skip
         """Score one attempt at saying `target` and log it."""
+        attempt = self.score_practice(target, source, source_session)
+        self.practice_store.add(attempt)
+        self.events.emit("practice_result", attempt=attempt.to_dict())
+        return attempt
+
+    def score_practice(self, target: str, source: Recording | Path | str,
+                       source_session: str | None = None) -> PracticeAttempt:  # fmt: skip
+        """Score one attempt at saying `target`, without logging it (the server's practice lane)."""
         path = Path(source.path) if isinstance(source, Recording) else Path(source)
         result = self.analyze(path, [self.config.engine.practice_analyzer], reference_text=target, save=False)
         words = [{"word": f.target, "explanation": f.explanation, **f.details} for f in result.findings]
@@ -346,8 +354,6 @@ class Engine:
             source_session=source_session,
             status=status,
         )
-        self.practice_store.add(attempt)
-        self.events.emit("practice_result", attempt=attempt.to_dict())
         return attempt
 
     def weak_words(self, limit: int = 20) -> list[dict[str, Any]]:

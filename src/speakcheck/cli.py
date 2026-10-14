@@ -14,6 +14,7 @@ from .engine.errors import SpeakcheckError
 from .engine.events import Event
 from .engine.models import AnalysisResult
 from .engine.profiles import PROFILES
+from .server import cli as server_cli
 from .web.client import DaemonError, call, find_daemon
 
 EngineFactory = Callable[[Config], Engine]
@@ -67,6 +68,7 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", parents=[common], help="system + plugin diagnostics as JSON")
     h = sub.add_parser("history", parents=[common], help="your most frequent mistakes")
     h.add_argument("--limit", type=int, default=10)
+    server_cli.add_parser(sub, common)
     return p
 
 
@@ -218,6 +220,8 @@ def main(argv: list[str] | None = None, engine_factory: EngineFactory = Engine,
         return update.run_update(args) if args.command == "update" else update.run_uninstall(args, ask)
     try:
         config = load_config(args.config).with_overrides(args.set)
+        if args.command == "server":
+            return server_cli.run(args, config, ask)
         engine = engine_factory(config)
         if not args.quiet:
             engine.events.subscribe(_progress)

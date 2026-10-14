@@ -112,3 +112,20 @@
 
 [provider.pipewire]
 # device = "alsa_input.usb-..."  # PipeWire node name; default = default microphone
+
+# --- server mode (`speakcheck server serve`) ----------------------------------------------
+
+[server]
+# host = "127.0.0.1"          # 0.0.0.0 to listen on every interface (put HTTPS in front: Caddy, nginx)
+# port = 8770
+# data_dir = "~/.local/share/speakcheck/server"   # accounts, jobs (default: <engine data_dir>/server)
+# job_ttl_hours = 24          # finished jobs (audio and result) are deleted after this
+# max_upload_mb = 200
+# practice_workers = 2        # practice runs on its own threads, never behind long jobs
+# webhook_allow_private = false   # allow webhooks to private/local addresses
+
+[server.limits]               # per account; `speakcheck server limits set` overrides them
+# max_audio_minutes = 30
+# max_jobs = 2                # waiting or running at once
+# storage_mb = 2048           # synced history
+# requests_per_minute = 120

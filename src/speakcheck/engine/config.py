@@ -133,6 +133,34 @@ class EngineSettings(BaseModel):
     practice_max_s: float = 10.0
 
 
+class ServerLimits(BaseModel):
+    """Per-account limits; `speakcheck server limits set` overrides them for one account or all."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_audio_minutes: float = 30.0  # per job
+    max_jobs: int = 2  # queued or running at once
+    storage_mb: int = 2048  # synced history
+    requests_per_minute: int = 120
+
+
+class ServerSettings(BaseModel):
+    """`speakcheck server serve`: the engine as a service for many accounts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    host: str = "127.0.0.1"
+    port: int = 8770
+    data_dir: Path | None = None  # default: <engine.data_dir>/server
+    job_ttl_hours: float = 24.0  # finished jobs (audio and result) are deleted after this
+    max_upload_mb: int = 200
+    practice_workers: int = 2  # practice runs on its own threads, never behind long jobs
+    # Webhooks to private or local addresses are refused unless allowed (a user could otherwise
+    # make the server call services on its own network).
+    webhook_allow_private: bool = False
+    limits: ServerLimits = Field(default_factory=ServerLimits)
+
+
 def _default_providers() -> dict[str, list[str]]:
     linux = sys.platform.startswith("linux")
     return {
@@ -167,6 +195,7 @@ class Config(BaseModel):
     provider: dict[str, dict[str, Any]] = Field(default_factory=dict)
     analyzer: dict[str, dict[str, Any]] = Field(default_factory=dict)
     shortcuts: dict[str, str] = Field(default_factory=_default_shortcuts)
+    server: ServerSettings = Field(default_factory=ServerSettings)
 
     def provider_settings(self, name: str) -> dict[str, Any]:
         return dict(self.provider.get(name, {}))

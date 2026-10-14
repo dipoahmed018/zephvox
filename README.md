@@ -258,6 +258,35 @@ A new ability works the same way: subclass `analyzers.base.Analyzer`, set `needs
 `Finding`s, and register it under `speakcheck.analyzers`. Reports, history and session storage
 pick it up automatically.
 
+## Server mode
+
+`speakcheck server serve` runs the engine as a service for many people: an API for whole recordings
+(async jobs) and for practice (streamed while you speak). The admin manages it from the command line
+on the server:
+
+```sh
+speakcheck server accounts add alice
+speakcheck server invite alice --url https://speak.example.com   # one-time code for one device
+speakcheck server limits set alice --max-jobs 3 --max-audio-minutes 60
+speakcheck server devices list | jobs list | webhook-secret alice
+speakcheck server serve --host 0.0.0.0                            # put HTTPS (Caddy, nginx) in front
+```
+
+Each device redeems an invite for its own key (`POST /v1/devices/redeem`) and sends it as
+`Authorization: Bearer sk_...`. Keys are stored only as hashes and can be rotated or revoked.
+
+| API | What it does |
+|---|---|
+| `POST /v1/jobs` | upload audio (`audio`, optional `analyzers`, `webhook_url`; `Idempotency-Key` header) → `202` with the job id and `Location` |
+| `GET /v1/jobs/{id}` · `/events` | status and result · live progress (SSE). Finished jobs are deleted after 24 h |
+| `WS /v1/practice` | `start` (target text) → 16 kHz 16-bit mono PCM while speaking → `end` → score, typically under 0.1 s later |
+| `GET /v1/tts` | reference pronunciation audio |
+| `GET /v1/account`, `/v1/devices` | the account's limits, webhook secret and devices; `POST /v1/devices/me/rotate` for a new key |
+
+Webhooks are signed: `Speakcheck-Signature: t=<unix>,v1=<HMAC-SHA256(webhook secret, "<t>.<body>")>`,
+retried after 1, 5 and 30 minutes. Full API docs are served at `/v1/docs`. Settings and default
+limits are under `[server]` in `config.example.toml`.
+
 ## Tests
 
 ```sh

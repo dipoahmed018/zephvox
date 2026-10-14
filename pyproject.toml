@@ -55,8 +55,8 @@ voice = [
 ]
 # Optional GPL plugin: espeak-ng pronunciations (plugins/speakcheck-espeak, a separate package).
 espeak = ["speakcheck-espeak"]
-# Local daemon + web GUI (`speakcheck serve`).
-web = ["fastapi>=0.115", "uvicorn>=0.30", "python-multipart>=0.0.9"]
+# Local daemon + web GUI, and `speakcheck server serve` (websockets: practice streaming).
+web = ["fastapi>=0.115", "uvicorn>=0.30", "python-multipart>=0.0.9", "websockets>=13"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-cov>=5", "respx>=0.21"]
