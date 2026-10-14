@@ -67,6 +67,29 @@ def normalize(phones: Iterable[str]) -> list[str]:
     return out
 
 
+# Two symbols that make one English phone when a driver writes IPA as single characters.
+_PAIRS = {"aɪ", "aʊ", "eɪ", "oʊ", "ɔɪ", "əʊ", "tʃ", "dʒ"}
+_MARKS = set("ˈˌːˑ͡")
+
+
+def split_ipa(text: str | Iterable[str]) -> list[str]:
+    """IPA written as one character per symbol ("tʃeɪn") → canonical phones (tʃ eɪ n).
+
+    Ambiguous on purpose in rare cases: "drawing" /dɹɔɪŋ/ reads as ɔɪ, like most IPA readers would.
+    """
+    chars = [c for c in text if c not in _MARKS and not c.isspace() and c not in "-."]
+    out, i = [], 0
+    while i < len(chars):
+        pair = "".join(chars[i : i + 2])
+        if pair in _PAIRS:
+            out.append(pair)
+            i += 2
+        else:
+            out.append(chars[i])
+            i += 1
+    return normalize(out)
+
+
 def arpabet_to_ipa(arpabet: Iterable[str]) -> list[str]:
     out = []
     for token in arpabet:

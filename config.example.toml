@@ -51,8 +51,18 @@
 # --- pronunciation ----------------------------------------------------------------------
 
 [provider.chain]
-# order = ["cmudict", "espeak"]   # UK English: ["espeak"] plus language = "en-gb" below
+# order = ["cmudict", "deep-phonemizer"]   # UK English: ["misaki", "deep-phonemizer"] plus accent = "en-gb" below
 
+[provider.misaki]
+# accent = "en-us"                # or "en-gb": US or UK dictionary
+# silver = true                   # also the larger, less checked dictionary
+
+[provider.deep-phonemizer]         # predicts words no dictionary has, from their spelling
+# model = "dipumiah018/deep-phonemizer-en-us"   # Hugging Face repo, or a local folder
+# revision = "2ff0a505d54b995a59ad65f4c1792b293a806412"   # a fixed upload of it
+# device = "cpu"
+
+# Only with the optional espeak plugin (uv sync --extra espeak); then set the chain's order to cmudict, espeak.
 [provider.espeak]
 # language = "en-us"              # or "en-gb"
 

@@ -235,12 +235,11 @@ class TestCapabilities:
         monkeypatch.setattr(SystemCapabilities, "has_module", staticmethod(lambda n: n in modules))
         hints = caps.setup_hints()
         assert hints[0].startswith("speech models: uv sync --extra models --extra cuda")
-        assert hints[1:] == ["ffmpeg (audio files other than WAV): brew install ffmpeg"]  # espeak: models extra
+        assert hints[1:] == ["ffmpeg (audio files other than WAV): brew install ffmpeg"]  # no espeak-ng needed
         modules.add("torch")
         hints = caps.setup_hints()
         assert "reinstall" in hints[0]  # torch installed but blind to the GPU
-        assert "espeak-ng: brew install espeak-ng" in hints  # models installed without the bundled copy
-        modules.update({"espeakng_loader", "av"})
+        modules.add("av")
         caps.gpu = capabilities.GPUInfo("cuda", "RTX", 8.0)
         assert caps.setup_hints() == []  # nothing left to install
 

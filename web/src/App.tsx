@@ -1,5 +1,6 @@
 import { AudioWaveform, FileText, History as HistoryIcon, Mic, Settings, Target, TrendingUp, X } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { LICENSE_NAME, SOURCE_URL } from "./about";
 import { api } from "./api";
 import { LevelMeter } from "./components/LevelMeter";
 import { Notices } from "./components/Notices";
@@ -61,7 +62,14 @@ export function App() {
             <span className="nav-label">{label}</span>
           </button>
         ))}
-        <div className="sidebar-foot">Runs on your computer. Nothing leaves it.</div>
+        <div className="sidebar-foot">
+          Runs on your computer. Nothing leaves it.
+          <br />
+          <a href={SOURCE_URL} target="_blank" rel="noreferrer">
+            Source code
+          </a>{" "}
+          · {LICENSE_NAME}
+        </div>
       </nav>
 
       <div className="main">

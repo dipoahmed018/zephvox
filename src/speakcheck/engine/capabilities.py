@@ -83,9 +83,6 @@ class SystemCapabilities:
                              "(e.g. 10.3.0 for RX 6000) and check you're in the render/video groups")  # fmt: skip
             else:
                 hints.append(f"PyTorch can't see the GPU: reinstall with `uv sync --extra models --extra {accelerator}`")
-        # espeak-ng comes bundled with the models extra; a system copy is only a fallback.
-        if self.has_module("torch") and not self.has_module("espeakng_loader") and not self.has_binary("espeak-ng"):
-            hints.append(f"espeak-ng: {install_hint('espeak-ng')}")
         if not self.has_module("av") and not self.has_binary("ffmpeg"):  # PyAV comes with the models extra
             hints.append(f"ffmpeg (audio files other than WAV): {install_hint('ffmpeg')}")
         if not self.has_binary("ollama"):

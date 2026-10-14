@@ -31,6 +31,7 @@ class Download:
     name: str  # repo id, faster-whisper model name, or Ollama model
     approx_gb: float | None = None
     patterns: tuple[str, ...] | None = None  # huggingface: only these files
+    revision: str | None = None  # huggingface: a commit, so the files can't change under us
 
 
 @dataclass

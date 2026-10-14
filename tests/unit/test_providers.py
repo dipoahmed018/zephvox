@@ -1,4 +1,4 @@
-"""Providers that can be tested without models: LLM (HTTP), G2P (cmudict, chain), PipeWire capture."""
+"""Providers that can be tested without models: LLM (HTTP), G2P (dictionaries, chain), PipeWire capture."""
 
 import json
 import signal
@@ -16,6 +16,7 @@ from speakcheck.providers.capture import pipewire
 from speakcheck.providers.capture.pipewire import PipeWireCapture
 from speakcheck.providers.g2p.chain import ChainG2P
 from speakcheck.providers.g2p.cmudict import CMUDictG2P
+from speakcheck.providers.g2p.misaki import MisakiG2P, misaki_to_phones
 from speakcheck.providers.llm.openai_compat import OpenAICompatLLM, parse_json_reply
 
 BASE = "http://llm.test/v1"
@@ -115,12 +116,31 @@ class TestCMUDict:
         assert g2p.capabilities()["variants"] is True
 
 
+class TestMisaki:
+    def test_shorthand_and_r_colored_vowels(self):
+        assert misaki_to_phones("bˈʌɾəɹ") == ["b", "ʌ", "t", "ɚ"]
+        assert misaki_to_phones("əɹˈIz") == ["ə", "ɹ", "aɪ", "z"]  # ɹ before a vowel stays
+        assert misaki_to_phones("nˈɜɹs") == ["n", "ɚ", "s"]
+        assert misaki_to_phones("ʧˈAnʤ") == ["tʃ", "eɪ", "n", "dʒ"]
+        assert misaki_to_phones("ɡˈQ") == ["ɡ", "oʊ"]  # UK "go"
+
+    def test_uk_dictionary(self):
+        pytest.importorskip("misaki")
+        g2p = MisakiG2P({"accent": "en-gb"})
+        assert g2p.check_available().ok
+        out = g2p.pronounce(["water", "read", "qwzxv"])
+        assert out["water"].variants == [["w", "ɔ", "t", "ə"]]
+        assert ["ɹ", "i", "d"] in out["read"].variants and ["ɹ", "ɛ", "d"] in out["read"].variants
+        assert out["qwzxv"].variants == []
+        assert not MisakiG2P({"accent": "en-au"}).check_available().ok
+
+
 class DictG2P(G2PProvider):
     name = "dict"
     table: dict = {}
 
     def pronounce(self, words):
-        return {w: Pronunciation(w, self.table.get(w, []), self.name) for w in words}
+        return {w: Pronunciation(w, self.table.get(w.lower(), []), self.name) for w in words}  # like real drivers
 
 
 class TestChain:
@@ -145,6 +165,17 @@ class TestChain:
         caps = chain.capabilities()
         assert caps["members"] == ["dict", "dict"] and set(caps["skipped"]) == {"missing", "off"}
 
+    def test_a_failing_member_is_skipped(self):
+        def broken(words):
+            raise OSError("offline")
+
+        services, guess = self.guessing_services({"x": [["x"]]})
+        guess.pronounce = broken
+        chain = ChainG2P({"order": ["dict", "guess"]}, services)
+        out = chain.pronounce(["x", "Ollama"])
+        assert out["x"].variants == [["x"]] and out["Ollama"].variants == []
+        assert chain.skipped["guess"] == "offline"
+
     def test_unavailable_when_no_members(self):
         chain = ChainG2P({"order": ["off"]}, self.services({"off": {}}, unavailable={"off"}))
         ok, reason = chain.check_available()
@@ -153,6 +184,44 @@ class TestChain:
     def test_requires_build_service(self):
         with pytest.raises(RuntimeError):
             ChainG2P().check_available()
+
+    def guessing_services(self, table):
+        """A dictionary member plus a guesser that "knows" every word (marks guesses with ?)."""
+
+        class Guess(DictG2P):
+            name = "guess"
+
+            def capabilities(self):
+                return {"any_word": True}
+
+            def pronounce(self, words):
+                self.asked = getattr(self, "asked", []) + list(words)
+                return {w: Pronunciation(w, [[f"{w}?"]], self.name) for w in words}
+
+        guess = Guess()
+
+        def build(kind, name):
+            if name == "guess":
+                return guess
+            g2p = DictG2P()
+            g2p.table = table
+            return g2p
+
+        return Services(SystemCapabilities(), build), guess
+
+    def test_acronyms_and_compounds_use_the_dictionary_before_guessing(self):
+        table = {c: [[c.upper()]] for c in "gpt"} | {"chat": [["tʃ", "æ", "t"]], "mail": [["m"]], "e": [["i"]],
+                                                      "us": [["ʌ", "s"]]}  # fmt: skip
+        services, guess = self.guessing_services(table)
+        chain = ChainG2P({"order": ["dict", "guess"]}, services)
+        out = chain.pronounce(["GPT", "ChatGPT", "e-mail", "chat", "TikTok", "US", "Ollama"])
+        assert out["GPT"].variants == [["G", "P", "T"]]  # spelled out
+        assert out["US"].variants == [["u?", "s?"]]  # letters this dictionary lacks are guessed one by one
+        assert out["ChatGPT"].variants == [["tʃ", "æ", "t", "G", "P", "T"]] and out["ChatGPT"].source == "dict"
+        assert out["e-mail"].variants == [["i", "m"]]
+        assert out["TikTok"].variants == [["Tik?", "Tok?"]] and out["TikTok"].source == "guess"
+        assert out["Ollama"].variants == [["Ollama?"]]
+        assert "chat" not in guess.asked and "ChatGPT" not in guess.asked
 
 
 class FakeProc:
@@ -333,40 +402,3 @@ class TestAutostart:
         ok, reason = self.llm().check_available()
         assert not ok and "ollama pull" in reason
         assert self.llm(check_model=False).check_available().ok
-
-
-class TestBundledEspeak:
-    def fake_modules(self, monkeypatch):
-        import sys
-        from types import ModuleType, SimpleNamespace
-
-        calls = {}
-        loader = ModuleType("espeakng_loader")
-        loader.get_library_path = lambda: "/wheel/libespeak-ng.so"
-        loader.get_data_path = lambda: "/wheel/espeak-ng-data"
-        wrapper = ModuleType("phonemizer.backend.espeak.wrapper")
-        wrapper.EspeakWrapper = SimpleNamespace(set_library=lambda p: calls.update(lib=p),
-                                                set_data_path=lambda p: calls.update(data=p))  # fmt: skip
-        monkeypatch.setitem(sys.modules, "espeakng_loader", loader)
-        monkeypatch.setitem(sys.modules, "phonemizer.backend.espeak.wrapper", wrapper)
-        return calls
-
-    def test_uses_wheel_library_by_default(self, monkeypatch):
-        from speakcheck.providers.g2p import espeak
-
-        calls = self.fake_modules(monkeypatch)
-        monkeypatch.delenv("PHONEMIZER_ESPEAK_LIBRARY", raising=False)
-        monkeypatch.setattr(espeak.importlib.util, "find_spec", lambda n: object())
-        assert espeak.use_bundled_espeak() is True
-        assert calls == {"lib": "/wheel/libespeak-ng.so", "data": "/wheel/espeak-ng-data"}
-
-    def test_user_choice_or_missing_wheel_leaves_phonemizer_alone(self, monkeypatch):
-        from speakcheck.providers.g2p import espeak
-
-        calls = self.fake_modules(monkeypatch)
-        monkeypatch.setenv("PHONEMIZER_ESPEAK_LIBRARY", "/mine/libespeak-ng.so")
-        assert espeak.use_bundled_espeak() is False
-        monkeypatch.delenv("PHONEMIZER_ESPEAK_LIBRARY")
-        monkeypatch.setattr(espeak.importlib.util, "find_spec", lambda n: None)
-        assert espeak.use_bundled_espeak() is False
-        assert calls == {}

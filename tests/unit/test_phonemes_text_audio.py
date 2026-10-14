@@ -14,6 +14,7 @@ from speakcheck.engine.phonemes import (
     is_vowel,
     normalize,
     normalize_phone,
+    split_ipa,
     substitution_cost,
 )
 from speakcheck.engine.text import clean_word, normalize_word, split_into_sentences
@@ -35,6 +36,12 @@ class TestPhonemes:
         assert arpabet_to_ipa(["TH", "IH1", "NG", "K"]) == ["θ", "ɪ", "ŋ", "k"]
         assert arpabet_to_ipa(["AH0", "B", "AW1", "T"]) == ["ə", "b", "aʊ", "t"]
         assert arpabet_to_ipa(["K", "AH1", "P"]) == ["k", "ʌ", "p"]
+
+    def test_split_ipa(self):
+        assert split_ipa("tʃˈeɪndʒ") == ["tʃ", "eɪ", "n", "dʒ"]
+        assert split_ipa("kuːbɝniːts") == ["k", "u", "b", "ɚ", "n", "i", "t", "s"]
+        assert split_ipa(["d", "ʒ", "a", "ɪ", "r", "o", "ʊ"]) == ["dʒ", "aɪ", "ɹ", "oʊ"]
+        assert split_ipa("tɪk-tɑːk") == ["t", "ɪ", "k", "t", "ɑ", "k"]
 
     def test_arpabet_unknown_symbol(self):
         with pytest.raises(ValueError):

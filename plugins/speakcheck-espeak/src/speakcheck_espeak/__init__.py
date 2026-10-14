@@ -1,4 +1,7 @@
-"""espeak-ng rules via `phonemizer`: covers any word (names, numbers, new words) and UK English.
+"""speakcheck plugin: espeak-ng rules via `phonemizer` for any word (names, numbers, new words), US or UK.
+
+GPL-3.0-or-later, like phonemizer and espeak-ng, and kept out of speakcheck itself for that reason.
+Installing it registers the `espeak` G2P driver; use it with e.g. `order = ["cmudict", "espeak"]`.
 
 Uses the espeak-ng library bundled in the `espeakng-loader` wheel (Linux, Windows, macOS), so no
 system install is needed and every machine gets the same version. `PHONEMIZER_ESPEAK_LIBRARY`
@@ -11,10 +14,10 @@ import importlib.util
 import os
 from typing import Any
 
-from ...engine.capabilities import install_hint
-from ...engine.models import Pronunciation
-from ...engine.phonemes import normalize
-from ..base import Availability, G2PProvider, ProviderSettings
+from speakcheck.engine.capabilities import install_hint
+from speakcheck.engine.models import Pronunciation
+from speakcheck.engine.phonemes import normalize
+from speakcheck.providers.base import Availability, G2PProvider, ProviderSettings
 
 
 def use_bundled_espeak() -> bool:
@@ -42,7 +45,7 @@ class EspeakG2P(G2PProvider):
 
     def check_available(self) -> Availability:
         if importlib.util.find_spec("phonemizer") is None:
-            return Availability(False, "python package 'phonemizer' not installed (uv sync --extra models)")
+            return Availability(False, "python package 'phonemizer' not installed (uv sync --extra espeak)")
         self._bundled = use_bundled_espeak()
         from phonemizer.backend import EspeakBackend
 
@@ -51,7 +54,7 @@ class EspeakG2P(G2PProvider):
         return Availability(True)
 
     def capabilities(self) -> dict[str, Any]:
-        return {"accents": ["en-us", "en-gb"], "variants": False, "phoneme_set": "canonical-ipa",
+        return {"accents": ["en-us", "en-gb"], "variants": False, "phoneme_set": "canonical-ipa", "any_word": True,
                 "library": "bundled" if self._bundled else "system"}  # fmt: skip
 
     def pronounce(self, words: list[str]) -> dict[str, Pronunciation]:

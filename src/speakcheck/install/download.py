@@ -14,9 +14,12 @@ from pathlib import Path
 from ..engine.config import Config, load_config
 from ..engine.registry import Registry
 from ..providers.base import Download
+from ..providers.g2p.chain import ChainG2P
+
+CHAIN_ORDER = ChainG2P.Settings().order
 
 # The stages whose drivers download models.
-MODEL_KINDS = ("stt", "phonemes", "tts", "llm")
+MODEL_KINDS = ("stt", "phonemes", "g2p", "tts", "llm")
 
 
 def plan_downloads(config: Config, registry: Registry | None = None) -> list[Download]:
@@ -25,9 +28,13 @@ def plan_downloads(config: Config, registry: Registry | None = None) -> list[Dow
     found = []
     for kind in MODEL_KINDS:
         names = [n for n in config.providers.get(kind, []) if n in registry.names(kind)]
-        if names:
-            cls = registry.get(kind, names[0])
-            found += cls(config.provider_settings(names[0])).downloads()
+        if not names:
+            continue
+        members = [names[0]]
+        if kind == "g2p" and names[0] == "chain":  # a chain uses every member
+            members = [n for n in config.provider_settings("chain").get("order", CHAIN_ORDER) if n in registry.names(kind)]
+        for name in members:
+            found += registry.get(kind, name)(config.provider_settings(name)).downloads()
     return found
 
 
@@ -55,7 +62,8 @@ def fetch(download: Download) -> None:
     if download.source == "huggingface":
         from huggingface_hub import snapshot_download
 
-        snapshot_download(download.name, allow_patterns=list(download.patterns) if download.patterns else None)
+        snapshot_download(download.name, revision=download.revision,
+                          allow_patterns=list(download.patterns) if download.patterns else None)  # fmt: skip
     elif download.source == "faster-whisper":
         from faster_whisper import download_model
 

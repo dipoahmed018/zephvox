@@ -1,5 +1,6 @@
 import { Cpu, Keyboard, Mic, Puzzle } from "lucide-react";
 import { useEffect, useState } from "react";
+import { LICENSE_NAME, SOURCE_URL } from "../about";
 import { api } from "../api";
 import { AnalyzerToggles } from "../components/AnalyzerToggles";
 import { MicSelect } from "../components/MicSelect";
@@ -166,6 +167,13 @@ export function Status() {
             <p className="faint" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
               ★ in use · ✗ unavailable (hover for why). Change drivers in <code>config.toml</code> in the speakcheck
               folder (see <code>config.example.toml</code>).
+            </p>
+            <p className="faint" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
+              speakcheck is free software under the {LICENSE_NAME} license:{" "}
+              <a href={SOURCE_URL} target="_blank" rel="noreferrer">
+                source code
+              </a>
+              .
             </p>
           </div>
         </div>

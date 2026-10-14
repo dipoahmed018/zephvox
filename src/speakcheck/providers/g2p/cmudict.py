@@ -1,8 +1,12 @@
-"""CMU Pronouncing Dictionary: ~134k US-English words with all accepted variants."""
+"""CMU Pronouncing Dictionary: ~134k US-English words with all accepted variants.
+
+The dictionary ships with speakcheck (`data/cmudict`, BSD-style license from Carnegie Mellon).
+"""
 
 from __future__ import annotations
 
-import importlib.util
+import re
+from importlib.resources import files
 from typing import Any
 
 from ...engine.models import Pronunciation
@@ -18,8 +22,6 @@ class CMUDictG2P(G2PProvider):
         self._dict: dict[str, list[list[str]]] | None = None
 
     def check_available(self) -> Availability:
-        if importlib.util.find_spec("cmudict") is None:
-            return Availability(False, "python package 'cmudict' not installed")
         return Availability(True)
 
     def capabilities(self) -> dict[str, Any]:
@@ -27,9 +29,7 @@ class CMUDictG2P(G2PProvider):
 
     def _lookup(self) -> dict[str, list[list[str]]]:
         if self._dict is None:
-            import cmudict
-
-            self._dict = cmudict.dict()
+            self._dict = load_cmudict()
         return self._dict
 
     def pronounce(self, words: list[str]) -> dict[str, Pronunciation]:
@@ -43,3 +43,17 @@ class CMUDictG2P(G2PProvider):
                     variants.append(ipa)
             result[word] = Pronunciation(word, variants, self.name if variants else "")
         return result
+
+
+_VARIANT = re.compile(r"\(\d+\)$")
+
+
+def load_cmudict() -> dict[str, list[list[str]]]:
+    """word → ARPAbet variants. Lines look like `read(2) R EH1 D  # comment`."""
+    table: dict[str, list[list[str]]] = {}
+    text = files("speakcheck.data").joinpath("cmudict", "cmudict.dict").read_text(encoding="utf-8")
+    for line in text.splitlines():
+        parts = line.split("#", 1)[0].split()
+        if len(parts) > 1:
+            table.setdefault(_VARIANT.sub("", parts[0]), []).append(parts[1:])
+    return table

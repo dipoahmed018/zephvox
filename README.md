@@ -45,7 +45,7 @@ which:
 7. **adds speakcheck to your app menu** and a `speakcheck` command to your terminal;
 8. **runs a test analysis** to check it all works.
 
-Nothing else needs a system install: espeak-ng and ffmpeg's decoders come with the Python packages.
+Nothing else needs a system install: the pronunciation dictionary and ffmpeg's decoders come with the Python packages.
 
 ### Profiles
 
@@ -169,14 +169,24 @@ CLI ──► Engine ──► Planner ──► Providers (drivers) ──► A
 |---|---|
 | `capture` | `pipewire` (Linux), `sounddevice` (Windows/macOS/Linux) |
 | `stt` | `hf-whisper` (transformers, GPU), `faster-whisper` (CPU) |
-| `g2p` | `chain` (= `cmudict` then `espeak`), `cmudict`, `espeak` |
+| `g2p` | `chain` (= `cmudict`, then `deep-phonemizer` for words it lacks), `cmudict`, `misaki` (US or UK dictionaries), `deep-phonemizer`; `espeak` as an optional plugin |
 | `phonemes` | `wav2vec2` (`facebook/wav2vec2-lv-60-espeak-cv-ft`) |
 | `llm` | `openai-compat` (Ollama `qwen3:8b` by default; also llama.cpp, vLLM, LM Studio, cloud APIs) |
-| `tts` | `espeak-ng` (reference pronunciations in practice) |
+| `tts` | `kokoro` (natural voices), `espeak-ng` (robotic, if installed on the system) |
 | `triggers` | `portal`, `pynput` (global shortcuts) |
 
 All G2P and phoneme drivers convert into one canonical IPA phone set (`engine/phonemes.py`).
 That shared set is what makes mixing drivers safe.
+
+Expected pronunciations come from the CMU Pronouncing Dictionary (shipped with speakcheck). Short
+acronyms are spelled out ("GPT") and compound words are split ("ChatGPT", "e-mail") before anything
+is guessed. Words no dictionary has (names, brands, new words) are predicted from their spelling by a
+small [DeepPhonemizer](https://github.com/as-ideas/DeepPhonemizer) model. For British English, use
+the `misaki` driver with `accent = "en-gb"`.
+
+Third-party drivers are Python packages that register an entry point (see `pyproject.toml`).
+[`plugins/speakcheck-espeak`](plugins/speakcheck-espeak) is one: it adds espeak-ng's rules as the
+`espeak` driver (`uv sync --extra espeak`). It is GPL-licensed, so it stays a separate package.
 
 ### Configuration
 
@@ -207,7 +217,7 @@ g2p = ["chain"]
 model = "openai/whisper-large-v3-turbo"
 
 [provider.chain]
-order = ["cmudict", "espeak"]      # for UK English: ["espeak"] plus [provider.espeak] language = "en-gb"
+order = ["cmudict", "deep-phonemizer"]   # UK English: ["misaki", "deep-phonemizer"] plus [provider.misaki] accent = "en-gb"
 
 [provider.openai-compat]
 model = "qwen3:8b"                 # or qwen3:14b — fits in 16 GB VRAM
@@ -267,3 +277,16 @@ uv run pytest -m llm                      # live Ollama
 - Pronunciation is judged against standard US (or UK) English. Some findings are accent rather than
   mistakes.
 - Thresholds are a first guess and need tuning on real speech.
+
+## License
+
+speakcheck is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+You can use and change it freely. If you share it, or run a changed version as a service for others,
+you must publish your source under the same license.
+
+To offer it as a paid or hosted service without publishing your source, or to build it into a
+closed-source product, a **commercial license** is available. See [LICENSING.md](LICENSING.md).
+
+Contributions are welcome under the [Contributor License Agreement](CLA.md); see
+[CONTRIBUTING.md](CONTRIBUTING.md). Third-party packages and models keep their own licenses:
+[THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

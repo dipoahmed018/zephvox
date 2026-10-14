@@ -3,12 +3,14 @@ name = "speakcheck"
 version = "0.1.0"
 description = "Pluggable engine that finds pronunciation and grammar mistakes in your spoken English"
 readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+authors = [{ name = "dipoahmed018", email = "dipoahmed018@gmail.com" }]
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "numpy>=1.26",
     "httpx>=0.27",
     "pydantic>=2.7",
-    "cmudict>=1.0",
     "platformdirs>=4.2",
 ]
 
@@ -18,9 +20,9 @@ dependencies = [
 models = [
     "transformers>=4.56",
     "faster-whisper>=1.1",
-    "phonemizer>=3.3",
-    # espeak-ng library + data as a wheel (Linux, Windows, macOS): no system install needed.
-    "espeakng-loader>=0.2.4",
+    "safetensors>=0.4",
+    # US and UK pronunciation dictionaries (also Kokoro's text front end).
+    "misaki>=0.9.4",
     # ffmpeg's libraries as a wheel, to read any audio file (also needed by faster-whisper).
     "av>=12",
 ]
@@ -43,9 +45,16 @@ desktop = [
 # Natural reference voices for practice.
 voice = [
     "kokoro>=0.9",
+    # What misaki[en] would bring, minus its GPL espeak fallback (see override-dependencies).
+    "num2words>=0.5",
+    "spacy>=3.8",
+    # Kokoro imports `attr` without declaring it (phonemizer used to bring it in).
+    "attrs>=23",
     # spaCy model Kokoro's text front end needs; it would otherwise try to pip-install it at runtime.
     "en-core-web-sm>=3.8",
 ]
+# Optional GPL plugin: espeak-ng pronunciations (plugins/speakcheck-espeak, a separate package).
+espeak = ["speakcheck-espeak"]
 # Local daemon + web GUI (`speakcheck serve`).
 web = ["fastapi>=0.115", "uvicorn>=0.30", "python-multipart>=0.0.9"]
 
@@ -74,7 +83,8 @@ faster-whisper = "speakcheck.providers.stt.faster_whisper:FasterWhisperSTT"
 
 [project.entry-points."speakcheck.g2p"]
 cmudict = "speakcheck.providers.g2p.cmudict:CMUDictG2P"
-espeak = "speakcheck.providers.g2p.espeak:EspeakG2P"
+misaki = "speakcheck.providers.g2p.misaki:MisakiG2P"
+deep-phonemizer = "speakcheck.providers.g2p.deep_phonemizer:DeepPhonemizerG2P"
 chain = "speakcheck.providers.g2p.chain:ChainG2P"
 
 [project.entry-points."speakcheck.phonemes"]
@@ -103,6 +113,9 @@ packages = ["src/speakcheck"]
 [tool.uv]
 default-groups = ["dev"]
 conflicts = [[{ extra = "cpu" }, { extra = "cuda" }, { extra = "rocm" }]]
+# Kokoro asks for misaki[en], whose espeak fallback is GPL. speakcheck supplies its own fallback
+# (deep-phonemizer), so install plain misaki and keep the default install free of GPL code.
+override-dependencies = ["misaki>=0.9.4"]
 environments = [
     "sys_platform == 'linux' and platform_machine == 'x86_64'",
     "sys_platform == 'linux' and platform_machine == 'aarch64'",
@@ -111,6 +124,7 @@ environments = [
 ]
 
 [tool.uv.sources]
+speakcheck-espeak = { path = "plugins/speakcheck-espeak" }
 # macOS takes torch from PyPI (its only build, with Apple GPU support).
 torch = [
     { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform != 'darwin'" },
@@ -152,6 +166,6 @@ omit = [
     # Thin wrappers around heavy model runtimes; covered by the opt-in integration suite.
     "*/providers/stt/*",
     "*/providers/phonemes/*",
-    "*/providers/g2p/espeak.py",
+    "*/providers/g2p/_deep_phonemizer.py",
     "*/providers/tts/kokoro.py",
 ]

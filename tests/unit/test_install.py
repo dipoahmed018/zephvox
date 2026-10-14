@@ -249,6 +249,7 @@ class TestDownloads:
         names = [(d.source, d.name) for d in download.plan_downloads(load_config(path))]
         assert names == [("huggingface", "openai/whisper-large-v3-turbo"),
                          ("huggingface", "facebook/wav2vec2-lv-60-espeak-cv-ft"),
+                         ("huggingface", "dipumiah018/deep-phonemizer-en-us"),  # the chain's guesser
                          ("huggingface", "hexgrad/Kokoro-82M"), ("ollama", "qwen3:8b")]  # fmt: skip
         path.write_text(f'profile = "cpu-light"\n[engine]\ndata_dir = "{tmp_path}"\n')
         assert download.plan_downloads(load_config(path))[0] == Download("faster-whisper", "base.en", 0.15)

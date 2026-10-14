@@ -15,7 +15,7 @@ from . import audio
 from .errors import PlanError
 from .events import EventBus
 from .models import SAMPLE_RATE, PhoneSeq
-from .text import normalize_word, split_into_sentences
+from .text import clean_word, normalize_word, split_into_sentences
 
 SEGMENT_PAD_S = 0.15
 
@@ -101,8 +101,14 @@ def _transcript(store: ArtifactStore):
 
 
 def _expected_phonemes(store: ArtifactStore):
-    words = sorted({normalize_word(w.text) for s in store.get("transcript").segments for w in s.words} - {""})
-    return store.provider("g2p").pronounce(words)
+    # Keyed by the lowercase word, but G2P sees the spelling as written: "GPT" is said letter by letter.
+    forms: dict[str, str] = {}
+    for seg in store.get("transcript").segments:
+        for w in seg.words:
+            if key := normalize_word(w.text):
+                forms.setdefault(key, clean_word(w.text))
+    found = store.provider("g2p").pronounce(sorted(set(forms.values())))
+    return {key: found[form] for key, form in sorted(forms.items())}
 
 
 def _heard_phonemes(store: ArtifactStore):

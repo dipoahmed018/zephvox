@@ -1,7 +1,7 @@
 """Opt-in tests with real models. Run with e.g.:
 
     uv run python scripts/make_fixtures.py
-    uv run pytest -m "audio and models"          # Whisper + CMUdict/espeak + wav2vec2
+    uv run pytest -m "audio and models"          # Whisper + CMUdict/DeepPhonemizer + wav2vec2
     uv run pytest -m gpu                          # same, asserting the GPU is used
     uv run pytest -m llm                          # live Ollama qwen3:8b
 """
