@@ -52,26 +52,28 @@
     });
   });
 
-  // ---- install tabs -----------------------------------------------------------------------
-  const tabs = [...document.querySelectorAll(".tab")];
-  function select(tab) {
-    tabs.forEach((t) => {
-      const on = t === tab;
+  // ---- operating system switch: one choice controls every command on the page -------------
+  const osTabs = [...document.querySelectorAll("[data-os-tab]")];
+  function setOs(os) {
+    osTabs.forEach((t) => {
+      const on = t.dataset.osTab === os;
       t.setAttribute("aria-selected", String(on));
       t.tabIndex = on ? 0 : -1;
-      document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+    });
+    document.querySelectorAll("[data-os]").forEach((el) => {
+      el.hidden = el.dataset.os !== os;
     });
   }
-  tabs.forEach((t, i) => {
-    t.addEventListener("click", () => select(t));
+  osTabs.forEach((t, i) => {
+    t.addEventListener("click", () => setOs(t.dataset.osTab));
     t.addEventListener("keydown", (e) => {
       if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
-      select(next);
+      const next = osTabs[(i + (e.key === "ArrowRight" ? 1 : osTabs.length - 1)) % osTabs.length];
+      setOs(next.dataset.osTab);
       next.focus();
     });
   });
-  select(/Windows/i.test(navigator.userAgent) ? document.getElementById("tab-win") : tabs[0]);
+  setOs(/Windows/i.test(navigator.userAgent) ? "win" : "unix");
 
   // ---- the wind ---------------------------------------------------------------------------
   const wind = (() => {

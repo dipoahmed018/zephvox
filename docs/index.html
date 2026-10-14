@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>zephvox: say it, see what to fix</title>
-  <meta name="description" content="zephvox listens while you speak English and shows the sounds and sentences to work on. A small app on your computer records; a zephvox server does the analysis.">
+  <meta name="description" content="zephvox listens while you speak English and shows the sounds and sentences to work on. Install the full app and everything runs on your computer, or the small client and use a zephvox server.">
   <meta name="theme-color" content="#f2f7fb">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <meta property="og:type" content="website">
@@ -24,7 +24,7 @@
   </script>
 </head>
 <body>
-  <a class="skip" href="#install">Skip to the install steps</a>
+  <a class="skip" href="#install">Skip to the setup guide</a>
 
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
@@ -39,6 +39,8 @@
       <symbol id="i-trend" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
       <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
       <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+      <symbol id="i-laptop" viewBox="0 0 24 24"><rect width="18" height="12" x="3" y="4" rx="2"/><path d="M2 20h20"/></symbol>
+      <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
       <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
     </defs>
@@ -50,9 +52,9 @@
       <nav class="nav" aria-label="Sections">
         <a href="#how">How it works</a>
         <a href="#features">Features</a>
-        <a href="#privacy">Privacy</a>
-        <a href="#faq">FAQ</a>
         <a class="keep" href="#install">Install</a>
+        <a href="#help">Help</a>
+        <a href="#faq">FAQ</a>
       </nav>
       <div class="header-actions">
         <a class="icon-btn" href="https://github.com/dipoahmed018/zephvox" aria-label="Source code on GitHub"><svg class="icon"><use href="#i-github"/></svg></a>
@@ -66,14 +68,14 @@
       <canvas id="wind" aria-hidden="true"></canvas>
       <div class="wrap">
         <div class="hero-copy">
-          <p class="eyebrow">The zephvox client</p>
+          <p class="eyebrow">Spoken English coach</p>
           <h1 style="margin-top:14px">Say it. <em>See what to fix.</em></h1>
-          <p class="lede">zephvox listens while you speak English and shows the sounds and sentences to work on, then lets you practice them until they pass. The small app on your computer records; a zephvox server does the analysis.</p>
+          <p class="lede">zephvox listens while you speak English and shows the sounds and sentences to work on, then lets you practice them until they pass. Everything can run on your own computer, offline.</p>
           <div class="cta">
-            <a class="btn primary" href="#install">Install the client</a>
+            <a class="btn primary" href="#install">Install zephvox</a>
             <a class="btn" href="#how">How it works</a>
           </div>
-          <p class="fine">Free and open source · Linux, macOS and Windows · about 80&nbsp;MB</p>
+          <p class="fine">Free and open source · Linux, macOS and Windows</p>
           <button class="btn wind-toggle" id="wind-toggle" type="button" aria-pressed="false">Make the wind hear a voice</button>
         </div>
 
@@ -95,8 +97,8 @@
             <p>Press <span class="kbd">Ctrl</span> <span class="kbd">Shift</span> <span class="kbd">Alt</span> <span class="kbd">R</span> in any app, talk for a minute or two, and press it again. You don't need the page open.</p>
           </li>
           <li>
-            <h3>Your server analyzes it</h3>
-            <p>The client sends the recording to the zephvox server you connected it to. It transcribes, compares your sounds with the dictionary and checks the grammar, then sends the report back.</p>
+            <h3>It listens closely</h3>
+            <p>zephvox transcribes what you said, compares each sound with the dictionary and checks the grammar. That happens on your computer, or on a zephvox server if you'd rather use one.</p>
           </li>
           <li>
             <h3>Read it, then practice</h3>
@@ -139,8 +141,8 @@
           <div class="feature"><span class="badge"><svg class="icon"><use href="#i-target"/></svg></span><h3>Practice that scores you</h3><p>Say a word and get a 0–100 score a moment later. It stops listening when you stop talking.</p></div>
           <div class="feature"><span class="badge"><svg class="icon"><use href="#i-wind"/></svg></span><h3>A page that shows what's happening</h3><p>Wind that follows your voice while you record and carries your words through each step.</p></div>
           <div class="feature"><span class="badge"><svg class="icon"><use href="#i-trend"/></svg></span><h3>Progress over time</h3><p>Your weakest words and the sounds you mix up most, across every recording.</p></div>
-          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-cloud"/></svg></span><h3>Works when the server doesn't</h3><p>If the server can't be reached, recordings wait on your computer and are analyzed when it's back.</p></div>
-          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-lock"/></svg></span><h3>Light, dark, and private</h3><p>Your history stays on your computer, and the page works in light and dark.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-lock"/></svg></span><h3>Private and offline</h3><p>The full app runs on your computer, and after the install it needs no internet. Nothing is sent anywhere.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-share"/></svg></span><h3>One strong machine, many devices</h3><p>Turn on sharing and your other devices, or other people, can analyze with your GPU through a small client.</p></div>
         </div>
       </div>
     </section>
@@ -148,53 +150,176 @@
     <section id="install" style="background:color-mix(in srgb, var(--sky) 5%, var(--bg))">
       <div class="wrap">
         <div class="section-head">
-          <p class="eyebrow">Install the client</p>
-          <h2>Three steps, about a minute.</h2>
+          <p class="eyebrow">Setup guide</p>
+          <h2>Install zephvox.</h2>
+          <p>There are two ways to run it. Most people want the full app.</p>
         </div>
-        <div class="install-grid">
+
+        <div class="choose">
+          <article class="card choice">
+            <span class="pill">Most people</span>
+            <h3><svg class="icon"><use href="#i-laptop"/></svg> Full app</h3>
+            <p>Everything runs on this computer, and works offline.</p>
+            <ul>
+              <li>A few GB of disk, 8&nbsp;GB+ of RAM</li>
+              <li>A GPU makes it fast; without one, a lighter profile is used</li>
+              <li>Can also share this computer with your other devices</li>
+            </ul>
+            <a class="btn primary" href="#full">Full app steps</a>
+          </article>
+          <article class="card choice">
+            <h3><svg class="icon"><use href="#i-cloud"/></svg> Client only</h3>
+            <p>A small app that records here and uses a zephvox server to analyze.</p>
+            <ul>
+              <li>About 80&nbsp;MB, no PyTorch and no models</li>
+              <li>Needs a server's address and an invite code</li>
+              <li>Good for a laptop, with a stronger machine doing the work</li>
+            </ul>
+            <a class="btn" href="#client">Client steps</a>
+          </article>
+        </div>
+
+        <div class="os-bar">
+          <span class="eyebrow">Your system</span>
+          <div class="tabs" role="tablist" aria-label="Your system">
+            <button class="tab" role="tab" data-os-tab="unix" aria-selected="true" type="button">macOS · Linux</button>
+            <button class="tab" role="tab" data-os-tab="win" aria-selected="false" type="button">Windows</button>
+          </div>
+        </div>
+
+        <!-- ---- full app ------------------------------------------------------------------ -->
+        <div class="guide" id="full">
+          <h3 class="guide-title">Full app</h3>
           <ol class="install-steps">
             <li>
-              <h3>Get an invite</h3>
-              <p>Ask whoever runs your zephvox server for its address and an invite code. The code is used once, for this one device.</p>
-            </li>
-            <li>
-              <h3>Run one command</h3>
-              <p>Put in your server's address and your code.</p>
-              <div>
-                <div class="tabs" role="tablist" aria-label="Your system">
-                  <button class="tab" role="tab" id="tab-unix" aria-controls="panel-unix" aria-selected="true" type="button">macOS · Linux</button>
-                  <button class="tab" role="tab" id="tab-win" aria-controls="panel-win" aria-selected="false" type="button">Windows</button>
-                </div>
-                <div class="panel" id="panel-unix" role="tabpanel" aria-labelledby="tab-unix">
-                  <div class="code">
-                    <pre><code id="cmd-unix">curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.sh | sh -s -- \
-  --server-url https://speak.example.com --invite inv_...</code></pre>
-                    <button class="copy" type="button" data-copy="cmd-unix"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
-                  </div>
-                </div>
-                <div class="panel" id="panel-win" role="tabpanel" aria-labelledby="tab-win">
-                  <div class="code">
-                    <pre><code id="cmd-win">$env:ZEPHVOX_SETUP_ARGS = "--server-url https://speak.example.com --invite inv_..."
-irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex</code></pre>
-                    <button class="copy" type="button" data-copy="cmd-win"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
-                  </div>
-                </div>
+              <h4>Run the installer</h4>
+              <p>One command. It installs <a href="https://docs.astral.sh/uv/">uv</a> if you don't have it, downloads zephvox into <span class="path" data-os="unix"><code>~/zephvox</code></span><span class="path" data-os="win" hidden><code>%LOCALAPPDATA%\zephvox</code></span> and starts the setup.</p>
+              <div class="code" data-os="unix">
+                <pre><code id="full-unix">curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.sh | sh</code></pre>
+                <button class="copy" type="button" data-copy="full-unix"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
               </div>
+              <div class="code" data-os="win" hidden>
+                <pre><code id="full-win">powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex"</code></pre>
+                <button class="copy" type="button" data-copy="full-win"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
+              </div>
+              <p class="aside">Run it in a terminal (PowerShell on Windows). Nothing else needs a system install.</p>
             </li>
             <li>
-              <h3>Press the shortcut</h3>
-              <p>Start zephvox from your app menu, then press <span class="kbd">Ctrl</span> <span class="kbd">Shift</span> <span class="kbd">Alt</span> <span class="kbd">R</span> and talk. You can change the keys in <b>Settings</b>.</p>
+              <h4>Answer the setup's questions</h4>
+              <p>The setup looks at your computer and recommends a profile. You mostly press Enter. It:</p>
+              <ul class="checks">
+                <li>detects your CPU, RAM, GPU and free disk space;</li>
+                <li>recommends a profile, and shows what it will download and how much before it starts;</li>
+                <li>installs <a href="https://ollama.com">Ollama</a> for grammar checking, if you agree;</li>
+                <li>installs the matching PyTorch build (NVIDIA, AMD on Linux, Apple GPU, or CPU);</li>
+                <li>downloads the models, adds zephvox to your app menu and runs a test analysis.</li>
+              </ul>
+              <details class="more">
+                <summary>Which profile will I get?</summary>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Profile</th><th>Recommended for</th><th>Speech to text</th><th>Grammar</th></tr></thead>
+                    <tbody>
+                      <tr><td><code>large</code></td><td>GPU with 16 GB+ (Mac: 32 GB+)</td><td>Whisper large-v3-turbo</td><td>qwen3:14b</td></tr>
+                      <tr><td><code>standard</code></td><td>GPU with 10–16 GB (Mac: 16 GB+)</td><td>Whisper large-v3-turbo</td><td>qwen3:8b</td></tr>
+                      <tr><td><code>small</code></td><td>GPU with 6–10 GB (Mac: 8 GB)</td><td>Whisper large-v3-turbo</td><td>qwen3:4b</td></tr>
+                      <tr><td><code>cpu</code></td><td>no usable GPU, 16 GB+ RAM</td><td>Whisper small.en</td><td>qwen3:4b (slow)</td></tr>
+                      <tr><td><code>cpu-light</code></td><td>under 16 GB RAM</td><td>Whisper base.en</td><td>off</td></tr>
+                      <tr><td><code>custom</code></td><td>your own choices</td><td colspan="2">any size, any model, an API, or none</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <p class="aside">You can switch profile later in Settings, and the setup is safe to run again.</p>
+              </details>
+            </li>
+            <li>
+              <h4>Start it and record</h4>
+              <p>Open <b>zephvox</b> from your app menu, or run it from a terminal:</p>
+              <div class="code">
+                <pre><code id="serve">zephvox serve --open</code></pre>
+                <button class="copy" type="button" data-copy="serve"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
+              </div>
+              <p>The page opens at <code>http://127.0.0.1:8765</code>. Press <span class="kbd">Ctrl</span> <span class="kbd">Shift</span> <span class="kbd">Alt</span> <span class="kbd">R</span>, talk, and press it again. Your report opens when it's ready.</p>
             </li>
           </ol>
 
-          <aside>
-            <ul class="reqs" aria-label="What you need">
-              <li><svg class="icon"><use href="#i-check"/></svg><span><b>A computer</b> running Linux, macOS or Windows. About 80&nbsp;MB of disk.</span></li>
-              <li><svg class="icon"><use href="#i-check"/></svg><span><b>A microphone</b>, and a connection to your server.</span></li>
-              <li><svg class="icon"><use href="#i-check"/></svg><span><b>Nothing else.</b> The installer brings its own Python through <a href="https://docs.astral.sh/uv/">uv</a>. No GPU, no models, no PyTorch.</span></li>
+          <div class="needs">
+            <h4>What you need</h4>
+            <ul class="reqs">
+              <li><svg class="icon"><use href="#i-check"/></svg><span><b>Linux, macOS or Windows</b>, and a microphone.</span></li>
+              <li><svg class="icon"><use href="#i-check"/></svg><span><b>8&nbsp;GB+ of RAM</b> (more is better) and <b>a few GB of free disk</b>. The setup checks before it downloads.</span></li>
+              <li><svg class="icon"><use href="#i-check"/></svg><span><b>A GPU is optional.</b> NVIDIA (driver 525+), AMD on Linux and Apple GPUs are used; AMD and Intel on Windows fall back to the CPU.</span></li>
+              <li><svg class="icon"><use href="#i-check"/></svg><span><b>Internet for the install</b> only. After that it runs offline.</span></li>
             </ul>
-            <p class="note">No server yet? The <b>full app</b> runs everything on your own computer, and can share it with your other devices. See <a href="https://github.com/dipoahmed018/zephvox#-install">the repository</a>.</p>
-          </aside>
+          </div>
+
+          <details class="more">
+            <summary>Afterwards: update, repair, unattended installs, remove</summary>
+            <div class="table-wrap">
+              <table>
+                <tbody>
+                  <tr><td><code>zephvox serve --open</code></td><td>start zephvox (or use the app menu)</td></tr>
+                  <tr><td><code>zephvox setup</code></td><td>review the profile or repair the install (<code>--dry-run</code> only shows the plan)</td></tr>
+                  <tr><td><code>zephvox update</code></td><td>install the latest release, keeping your settings</td></tr>
+                  <tr><td><code>zephvox uninstall</code></td><td>remove it, asking before deleting models or your recordings</td></tr>
+                  <tr><td><code>zephvox doctor</code></td><td>print what it found on this computer, for troubleshooting</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="aside">Unattended: add <code>--profile cpu --yes</code> to the installer command (on Windows, set <code>$env:ZEPHVOX_SETUP_ARGS = "--profile cpu --yes"</code> first).</p>
+          </details>
+        </div>
+
+        <!-- ---- client only --------------------------------------------------------------- -->
+        <div class="guide" id="client">
+          <h3 class="guide-title">Client only</h3>
+          <ol class="install-steps">
+            <li>
+              <h4>Get an invite</h4>
+              <p>You need a zephvox server's address and an invite code. Ask whoever runs the server, or <a href="#share">make your own</a> from a full install. A code works once, for one device, and expires after a few days.</p>
+            </li>
+            <li>
+              <h4>Run one command</h4>
+              <p>Put in the server's address and your code.</p>
+              <div class="code" data-os="unix">
+                <pre><code id="client-unix">curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.sh | sh -s -- \
+  --server-url https://speak.example.com --invite inv_...</code></pre>
+                <button class="copy" type="button" data-copy="client-unix"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
+              </div>
+              <div class="code" data-os="win" hidden>
+                <pre><code id="client-win">$env:ZEPHVOX_SETUP_ARGS = "--server-url https://speak.example.com --invite inv_..."
+irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex</code></pre>
+                <button class="copy" type="button" data-copy="client-win"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
+              </div>
+              <p class="aside">It installs the small client (about 80&nbsp;MB), connects it to the server and adds it to your app menu.</p>
+            </li>
+            <li>
+              <h4>Record</h4>
+              <p>Open <b>zephvox</b> from your app menu and press <span class="kbd">Ctrl</span> <span class="kbd">Shift</span> <span class="kbd">Alt</span> <span class="kbd">R</span>. Recordings and reports stay on your computer; only the analysis runs on the server. If the server can't be reached, recordings wait and are analyzed when it's back.</p>
+              <p class="aside">Already installed the client and have an invite now? In the app: <b>Settings → Where analysis runs → A server</b>.</p>
+            </li>
+          </ol>
+        </div>
+
+        <!-- ---- sharing ------------------------------------------------------------------- -->
+        <div class="guide" id="share">
+          <h3 class="guide-title">Let other devices use your full install</h3>
+          <p class="guide-lede">Your full app can act as the server, with its models already loaded. Your laptop, or a friend's computer, then needs only the client.</p>
+          <ol class="install-steps">
+            <li>
+              <h4>Turn sharing on</h4>
+              <p>In the app: <b>Settings → Sharing</b>. Switch <b>Share</b> on, and choose <b>My network</b> so other devices can reach it. The address to give out is shown there.</p>
+            </li>
+            <li>
+              <h4>Add an account and copy its invite</h4>
+              <p>Type a name under <b>Accounts</b> and press <b>Add and invite</b>. The invite is shown once, with the exact command for the other device. You can set limits per account and disconnect devices in the same tab.</p>
+            </li>
+            <li>
+              <h4>Connect the other device</h4>
+              <p>Follow the <a href="#client">client steps</a> there, using your computer's address and that invite.</p>
+            </li>
+          </ol>
+          <p class="note">Plain <code>http</code> is fine on your own network. To use it from the internet, put HTTPS in front with Caddy or nginx. See <a href="https://github.com/dipoahmed018/zephvox#-server-mode">server mode</a> in the README, which also covers running it 24/7 with Docker.</p>
         </div>
       </div>
     </section>
@@ -206,11 +331,30 @@ irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | ie
           <h2>Your voice goes where you send it, and nowhere else.</h2>
         </div>
         <div class="privacy">
-          <div class="card"><h3>Only to your server</h3><p>Recordings are sent to the one server you connected, and nowhere else. The page warns you if its address isn't encrypted.</p></div>
-          <div class="card"><h3>Your history stays here</h3><p>Recordings, reports and practice scores are kept on your computer. Backing them up to the server is a switch in Settings.</p></div>
-          <div class="card"><h3>A key for each device</h3><p>Your device's key is kept in a file only you can read. The server's admin can disconnect it, and you can replace it in Settings.</p></div>
+          <div class="card"><h3>Full app: nowhere</h3><p>Once installed, it needs no internet. Recordings, models and reports all stay on your computer.</p></div>
+          <div class="card"><h3>Client: only your server</h3><p>Recordings go to the one server you connected, and nowhere else. The app warns you if its address isn't encrypted.</p></div>
+          <div class="card"><h3>Your history stays here</h3><p>Reports and practice scores live on your computer. Backing them up to a server is a switch in Settings, off unless you turn it on.</p></div>
           <div class="card"><h3>Open source</h3><p>zephvox is free software under the AGPL-3.0. You can read exactly what it does with your audio.</p></div>
         </div>
+      </div>
+    </section>
+
+    <section id="help" style="padding-top:0">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Troubleshooting</p>
+          <h2>If something doesn't work.</h2>
+          <p>Running <code>zephvox doctor</code> prints what zephvox found on your computer, which helps with most of these.</p>
+        </div>
+        <div class="faq">
+          <details><summary>The report says "Grammar was skipped"</summary><p>The grammar model isn't downloaded yet. Open <b>Settings → Models &amp; checks → Grammar</b> and press <b>Download</b>, or run <code>ollama pull qwen3:8b</code> (use the model name shown there). Pronunciation still works in the meantime.</p></details>
+          <details><summary>The shortcut does nothing</summary><p>Check <b>Settings → General → Shortcuts</b>: it should say <b>Active</b>. On Linux, run <code>zephvox desktop-entry</code> once and allow the shortcuts when your desktop asks. On macOS, allow zephvox under <b>Privacy &amp; Security → Accessibility</b>. Make sure only one copy of zephvox is running. You can always bind <code>zephvox toggle</code> in your system's own keyboard settings.</p></details>
+          <details><summary>My AMD or NVIDIA GPU isn't used</summary><p>NVIDIA needs the normal driver, version 525 or newer; no CUDA toolkit. On AMD with Linux, your user must be in the <code>render</code> and <code>video</code> groups (the setup tells you), and some cards need an <code>HSA_OVERRIDE_GFX_VERSION</code> value, which the setup offers. AMD and Intel GPUs on Windows aren't supported by PyTorch, so the CPU profiles are used.</p></details>
+          <details><summary>The microphone isn't recording</summary><p>Choose it under <b>Settings → General → Microphone</b>. On macOS and Windows, allow microphone access for the terminal or app that started zephvox.</p></details>
+          <details><summary>The client can't connect to my server</summary><p>Check the address (it should start with <code>https://</code> unless the server is on the same computer) and that the invite hasn't been used or expired; ask for a new one if so. Servers that aren't on your own network need HTTPS in front of them.</p></details>
+          <details><summary>Analysis is very slow</summary><p>You're probably on a CPU profile. A smaller speech model and turning off grammar help, or use a server with a GPU. The profile can be changed any time in Settings.</p></details>
+        </div>
+        <p class="fine" style="margin-top:20px">Still stuck? <a href="https://github.com/dipoahmed018/zephvox/issues">Open an issue</a> and include the output of <code>zephvox doctor</code>.</p>
       </div>
     </section>
 
@@ -221,13 +365,14 @@ irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | ie
           <h2>Before you install.</h2>
         </div>
         <div class="faq">
-          <details><summary>Do I need a GPU or a fast computer?</summary><p>No. The client only records and shows reports; the server does the heavy work. Any computer with a microphone is fine.</p></details>
-          <details><summary>Where do I get an invite?</summary><p>From the person or organization that runs the zephvox server you're meant to use. They create your account and send you an invite code and the server's address.</p></details>
-          <details><summary>What if the server isn't reachable?</summary><p>You can keep recording. Recordings wait on your computer, marked "waiting for the server" in History, and are analyzed as soon as it's back.</p></details>
-          <details><summary>Can I run everything on my own computer instead?</summary><p>Yes. In <b>Settings → Where analysis runs</b>, choose <b>This computer</b>. zephvox offers to install the speech models, which are several GB, and then works offline.</p></details>
-          <details><summary>How do I change the shortcut keys?</summary><p><b>Settings → General → Shortcuts</b>: click <b>Change</b> and press the new keys. You can also bind <code>zephvox toggle</code> in your system's own keyboard settings.</p></details>
-          <details><summary>Which English does it check against?</summary><p>Standard American English by default, or British English if the server is set up for it. Some findings are accent rather than mistakes, and you can mark those as "not a mistake".</p></details>
-          <details><summary>How do I remove it?</summary><p>Run <code>zephvox uninstall</code>. It asks before deleting your recordings.</p></details>
+          <details><summary>Which install should I choose?</summary><p>The full app, unless you already have a zephvox server or a stronger machine on your network. It's simpler, private, and works offline. The client is for when you'd rather not run the models on this computer.</p></details>
+          <details><summary>Do I need a GPU?</summary><p>No. With a GPU the analysis takes seconds; on a CPU it's slower, and the setup picks a lighter profile for you. A client install needs no GPU at all.</p></details>
+          <details><summary>How big is the full install?</summary><p>Several GB: PyTorch and the speech models dominate. The setup tells you the exact sizes and checks your disk before downloading anything, and asks first.</p></details>
+          <details><summary>Where do I get an invite for the client?</summary><p>From whoever runs the server you're meant to use, or from your own full install: <b>Settings → Sharing</b>.</p></details>
+          <details><summary>Can I switch between the two later?</summary><p>Yes. <b>Settings → Where analysis runs</b> switches between this computer and a server. On a client install, choosing this computer offers to install the speech models.</p></details>
+          <details><summary>How do I change the shortcut keys?</summary><p><b>Settings → General → Shortcuts</b>: click <b>Change</b> and press the new keys.</p></details>
+          <details><summary>Which English does it check against?</summary><p>Standard American English by default, or British English with a custom profile. Some findings are accent rather than mistakes, and you can mark those as "not a mistake".</p></details>
+          <details><summary>How do I remove it?</summary><p>Run <code>zephvox uninstall</code>. It asks before deleting the models or your recordings.</p></details>
         </div>
       </div>
     </section>

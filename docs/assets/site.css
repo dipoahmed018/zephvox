@@ -546,30 +546,107 @@ section {
   color: var(--muted);
 }
 
-/* install */
-.install-grid {
+/* install guide */
+[hidden] {
+  display: none !important;
+}
+:not(pre) > code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--code-bg);
+  font-size: 0.88em;
+}
+.choose {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: clamp(24px, 4vw, 48px);
-  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.choice h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.6rem;
+  font-weight: 400;
+}
+.choice h3 .icon {
+  color: var(--sky-ink);
+}
+.choice p {
+  color: var(--muted);
+}
+.choice ul {
+  margin: 4px 0 8px;
+  padding-left: 20px;
+  color: var(--muted);
+}
+.choice .btn {
+  margin-top: auto;
+}
+.pill {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  padding: 3px 11px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sky) 15%, transparent);
+  color: var(--sky-ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+.os-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 40px;
+}
+.os-bar .tabs {
+  margin-top: 0;
+}
+.guide {
+  margin-top: 24px;
+  padding: clamp(20px, 3vw, 34px);
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  scroll-margin-top: 80px;
+}
+.guide-title {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 400;
+}
+.guide-lede {
+  margin-top: 8px;
+  color: var(--muted);
+  max-width: 62ch;
 }
 .install-steps {
   list-style: none;
-  margin: 0;
+  margin: 24px 0 0;
   padding: 0;
   display: grid;
-  gap: 22px;
+  gap: 28px;
   counter-reset: i;
 }
 .install-steps > li {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr);
-  gap: 4px 14px;
+  position: relative;
+  padding-left: 52px;
+  min-width: 0;
 }
 .install-steps > li::before {
   counter-increment: i;
   content: counter(i);
-  grid-row: span 3;
+  position: absolute;
+  left: 0;
+  top: -2px;
   display: grid;
   place-items: center;
   width: 36px;
@@ -579,14 +656,85 @@ section {
   color: var(--sky-ink);
   font-weight: 800;
 }
-.install-steps h3 {
+.install-steps h4 {
+  margin: 4px 0 6px;
   font-family: var(--sans);
   font-weight: 800;
   font-size: 1.1rem;
-  letter-spacing: 0;
-  margin-top: 5px;
 }
 .install-steps p {
+  color: var(--muted);
+}
+.install-steps p + p,
+.install-steps .code + p {
+  margin-top: 10px;
+}
+.aside {
+  font-size: 0.95rem;
+}
+.checks {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  color: var(--muted);
+}
+.checks li + li {
+  margin-top: 4px;
+}
+.more {
+  margin-top: 14px;
+}
+.more summary {
+  cursor: pointer;
+  padding: 6px 0;
+  font-weight: 700;
+  color: var(--sky-ink);
+}
+.table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+th,
+td {
+  padding: 10px 14px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--ink) 4%, transparent);
+}
+tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}
+td {
+  color: var(--muted);
+}
+td:first-child {
+  white-space: nowrap;
+  color: var(--ink);
+}
+.needs {
+  margin-top: 30px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+.needs h4 {
+  margin: 0 0 12px;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 .tabs {
@@ -613,9 +761,6 @@ section {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
-}
-.js .panel[hidden] {
-  display: none;
 }
 .code {
   position: relative;
@@ -770,8 +915,17 @@ section {
 @media (max-width: 860px) {
   .steps,
   .demo,
-  .install-grid {
+  .choose {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 520px) {
+  .install-steps > li {
+    padding-left: 0;
+    padding-top: 46px;
+  }
+  .install-steps > li::before {
+    top: 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
