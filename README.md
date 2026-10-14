@@ -20,25 +20,80 @@ Grammar (1)
      “Yesterday he go to the market.” [0:01.8]
 ```
 
-## Setup (Arch Linux, AMD GPU)
+## Install
+
+One line installs everything into a single folder: `~/speakcheck`, or `%LOCALAPPDATA%\speakcheck` on Windows.
 
 ```sh
-sudo pacman -S espeak-ng rocm-hip-runtime rocminfo ollama-rocm
-sudo usermod -aG render,video $USER      # then log out and back in
-rocminfo | grep gfx                      # should list your GPU (RX 6800 XT = gfx1030)
-ollama serve & ollama pull qwen3:8b; kill %1   # one-time download into ~/.ollama
-
-uv sync --extra models --extra desktop --extra web   # models, shortcuts + capture, web GUI
-uv run speakcheck doctor                 # what this machine can run
+# macOS / Linux
+curl -LsSf https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.sh | sh
+```
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.ps1 | iex"
 ```
 
-If PyTorch does not see the GPU, try `export HSA_OVERRIDE_GFX_VERSION=10.3.0`.
-The first analysis downloads Whisper large-v3-turbo (~1.6 GB) and wav2vec2 (~1.2 GB).
+The script installs [uv](https://docs.astral.sh/uv/) if needed, downloads speakcheck and starts `speakcheck setup`,
+which:
+
+1. **detects your hardware**: CPU, RAM, GPU and its memory, free disk space;
+2. **recommends a profile** (below). Accept it or pick another;
+3. **shows what it will download** and checks the disk space;
+4. **installs [Ollama](https://ollama.com)** for grammar, if you agree (winget, Homebrew, pacman or Ollama's script);
+5. **installs the matching PyTorch build** (NVIDIA → CUDA, AMD on Linux → ROCm, otherwise CPU; Macs use the Apple GPU);
+6. **downloads the models** with progress bars;
+7. **adds speakcheck to your app menu** and a `speakcheck` command to your terminal;
+8. **runs a test analysis** to check it all works.
+
+Nothing else needs a system install: espeak-ng and ffmpeg's decoders come with the Python packages.
+
+### Profiles
+
+| Profile | Recommended for | Speech to text | Grammar model |
+|---|---|---|---|
+| `large` | GPU with 16 GB+, or a Mac with 32 GB+ | Whisper large-v3-turbo (GPU) | qwen3:14b |
+| `standard` | GPU with 10–16 GB, or a Mac with 16 GB+ | Whisper large-v3-turbo (GPU) | qwen3:8b |
+| `small` | GPU with 6–10 GB, or a Mac with 8 GB | Whisper large-v3-turbo (GPU) | qwen3:4b |
+| `cpu` | no usable GPU, 16 GB+ RAM | Whisper small.en (faster-whisper) | qwen3:4b (slow) |
+| `cpu-light` | under 16 GB RAM | Whisper base.en (faster-whisper) | off (a cloud LLM can be added) |
+
+Change profile any time in the page's **Settings**, or with `speakcheck setup` (which also installs
+anything the new profile needs). A profile is only a starting point: anything you set in `config.toml`
+wins over it. These thresholds are first estimates; tell us if a profile doesn't suit your machine.
+
+### Afterwards
+
+| Command | What it does |
+|---|---|
+| `speakcheck serve --open` | start speakcheck (or use the app-menu entry) |
+| `speakcheck setup` | review the profile, repair the install; `--dry-run` only shows the plan |
+| `speakcheck update` | install the latest release, keeping your settings |
+| `speakcheck uninstall` | remove it (asks before deleting models or your recordings) |
+
+Unattended install: `curl … | sh -s -- --profile cpu --yes` (Windows: set `SPEAKCHECK_SETUP_ARGS="--profile cpu --yes"`).
+`SPEAKCHECK_DIR` changes the folder.
+
+**GPU notes.**
+- NVIDIA: the normal driver, 525 or newer. No CUDA toolkit is needed.
+- AMD on Linux: PyTorch's ROCm build brings its own ROCm libraries. Your user must be in the `render` and
+  `video` groups (setup tells you if not). If PyTorch can't use the card, setup offers the usual
+  `HSA_OVERRIDE_GFX_VERSION` fix.
+- AMD and Intel GPUs on Windows aren't supported by PyTorch, so those machines use a CPU profile.
+
+### From a git checkout (development)
+
+```sh
+git clone https://github.com/dipoahmed018/speakcheck && cd speakcheck
+uv run speakcheck setup      # same wizard; keeps the dev tools, and `update` is `git pull`
+```
+
+Or by hand: `uv sync --extra models --extra cuda --extra desktop --extra web --extra voice`, with
+`cuda`, `rocm` or `cpu` for your hardware.
 
 ## The web GUI
 
 ```sh
-uv run speakcheck serve --open           # http://127.0.0.1:8765
+speakcheck serve --open                  # http://127.0.0.1:8765  (in a git checkout: uv run speakcheck …)
 ```
 
 `serve` starts a local daemon: it keeps the models loaded, owns the microphone, registers global
@@ -86,13 +141,13 @@ Frontend development: `cd web && npm install && npm run dev` (Vite proxies `/api
 | `speakcheck history` | your most frequent mistakes across sessions |
 | `speakcheck providers` | which drivers are available, and which is selected |
 | `speakcheck serve` | daemon + web GUI + global shortcuts |
-| `speakcheck desktop-entry` | Linux: add speakcheck to the app menu and give its shortcuts a proper name |
+| `speakcheck desktop-entry` | add speakcheck to the app menu (Linux: also gives its shortcuts a proper name) |
 | `speakcheck toggle` / `speakcheck practice` | start/stop a recording or practice attempt (uses the daemon when it runs) |
 
 When the daemon is running, `record`, `start`, `stop`, `toggle` and `practice` are forwarded to it.
 
 Useful flags: `--analyzers grammar` (only one ability), `--set stt=faster-whisper` (pick a driver),
-`--config path.toml`. Sessions (audio + `result.json`) live in `~/.local/share/speakcheck/sessions/`.
+`--config path.toml`. Sessions (audio + `result.json`) live in your OS's app-data folder (Linux: `~/.local/share/speakcheck/sessions/`).
 
 ## Architecture
 
@@ -125,8 +180,20 @@ That shared set is what makes mixing drivers safe.
 
 ### Configuration
 
-`~/.config/speakcheck/config.toml`. Each stage takes a preference list, and the first available
-driver wins:
+Two files in the project root, both git-ignored. Copy them from their templates:
+
+- **`config.toml`** (from `config.example.toml`, which lists every setting): drivers, models, thresholds,
+  shortcuts.
+- **`.env`** (from `.env.example`): API keys and machine-specific environment variables (GPU overrides,
+  model cache location). Variables already set in your shell win.
+
+Both are found from where the code lives, so they apply however speakcheck starts: from a terminal
+in any folder, from the app menu, or from a global shortcut. `--config` or `SPEAKCHECK_CONFIG` picks
+another file. If you install speakcheck as a package without the project folder, it uses your OS's
+config folder instead: `~/.config/speakcheck/`, `~/Library/Application Support/speakcheck/` or
+`%LOCALAPPDATA%\speakcheck\`. `speakcheck doctor` shows which files are in use.
+
+Each stage takes a preference list, and the first available driver wins:
 
 ```toml
 [engine]

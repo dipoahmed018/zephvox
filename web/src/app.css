@@ -307,6 +307,51 @@ select,
   border-color: var(--accent);
 }
 
+.profile-list {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-option {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+  padding: 11px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: all var(--fast) var(--ease);
+}
+
+.profile-option:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.profile-option[aria-checked="true"] {
+  background: var(--raised-2);
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.profile-option:disabled {
+  cursor: progress;
+}
+
+.profile-option .muted,
+.profile-option .faint {
+  font-size: 0.88rem;
+}
+
+.profile-needs {
+  margin: 14px 0 0;
+  padding-left: 18px;
+  color: var(--accent-strong);
+  font-size: 0.9rem;
+}
+
 /* ---------- top bar bits ---------- */
 .conn {
   display: inline-flex;

@@ -4,6 +4,7 @@ import type {
   Feedback,
   History,
   PracticeStats,
+  Profiles,
   Recording,
   SessionSummary,
   Settings,
@@ -36,6 +37,8 @@ export const api = {
   settings: () => request<Settings>("GET", "/api/settings"),
   saveSettings: (changes: Partial<Pick<Settings, "capture" | "tts" | "analyzers">>) =>
     request<Settings>("PUT", "/api/settings", changes),
+  profiles: () => request<Profiles>("GET", "/api/profiles"),
+  setProfile: (name: string) => request<Profiles>("PUT", "/api/profile", { name }),
   devices: () => request<{ provider: string; selected: string | null; devices: Device[] }>("GET", "/api/devices"),
   voices: () =>
     request<{ provider: string; selected: string | null; voices: { id: string; label: string }[] }>("GET", "/api/voices"),

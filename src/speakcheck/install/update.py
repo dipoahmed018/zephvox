@@ -1,0 +1,134 @@
+"""`speakcheck update` and `speakcheck uninstall` for installs made by the install script."""
+
+from __future__ import annotations
+
+import argparse
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import urllib.request
+from collections.abc import Callable
+from pathlib import Path
+
+from ..engine.config import default_config_path, load_config, project_root
+from ..engine.errors import SpeakcheckError
+from . import ollama
+from .download import cache_path, plan_downloads
+from .state import STATE_FILE, InstallState, Runner, SetupError, is_checkout, sync
+from .wizard import Console
+
+REPO = "dipoahmed018/speakcheck"
+# Never replaced by an update: the user's files and the environment.
+PRESERVE = {"config.toml", ".env", ".venv", STATE_FILE, ".git"}
+
+Fetch = Callable[[str], bytes]
+
+
+def http_get(url: str) -> bytes:
+    request = urllib.request.Request(url, headers={"User-Agent": "speakcheck-updater"})
+    with urllib.request.urlopen(request, timeout=60) as resp:
+        return resp.read()
+
+
+def latest_version(fetch: Fetch = http_get) -> tuple[str, str]:
+    """(version, source archive URL) of the latest release, or of `main` if there is none yet."""
+    try:
+        tag = json.loads(fetch(f"https://api.github.com/repos/{REPO}/releases/latest"))["tag_name"]
+        return tag, f"https://github.com/{REPO}/archive/refs/tags/{tag}.tar.gz"
+    except (OSError, ValueError, KeyError):
+        return "main", f"https://github.com/{REPO}/archive/refs/heads/main.tar.gz"
+
+
+def extract(archive: bytes, dest: Path) -> Path:
+    """Unpack a GitHub source archive; returns its single top-level folder."""
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tar:
+        tar.extractall(dest, filter="data")
+    (top,) = [p for p in dest.iterdir() if p.is_dir()]
+    return top
+
+
+def replace_tree(new: Path, root: Path) -> None:
+    """Swap every top-level item of `root` for the new release's, keeping PRESERVE."""
+    for item in new.iterdir():
+        if item.name in PRESERVE:
+            continue
+        target = root / item.name
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        elif target.exists():
+            target.unlink()
+        shutil.move(str(item), target)
+
+
+def run_update(args: argparse.Namespace, fetch: Fetch = http_get, runner: Runner = subprocess.run) -> int:
+    root = project_root()
+    try:
+        if root is None:
+            raise SetupError("no install folder found")
+        if is_checkout(root):
+            raise SetupError("this is a git checkout: update it with `git pull`, then `uv run speakcheck setup`")
+        state = InstallState.load(root)
+        version, url = latest_version(fetch)
+        if version == state.version and version != "main" and not args.force:
+            print(f"speakcheck {version} is up to date.")
+            return 0
+        print(f"Updating {state.version or 'speakcheck'} → {version} …")
+        with tempfile.TemporaryDirectory() as tmp:
+            replace_tree(extract(fetch(url), Path(tmp)), root)
+        sync(root, state.extras or ["models", state.accelerator or "cpu", "desktop", "web", "voice"], runner)
+        state.version = version
+        state.save(root)
+    except (SpeakcheckError, OSError, tarfile.TarError) as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+    print(f"Updated to {version}. Run `uv run speakcheck setup` if you want to review the profile.")
+    return 0
+
+
+def run_uninstall(args: argparse.Namespace, ask: Callable[[str], str] = input, runner: Runner = subprocess.run) -> int:
+    console = Console(interactive=sys.stdin.isatty() and not args.yes, ask=ask)
+    say = console.say
+    root = project_root()
+    if root is None:
+        print("error: no install folder found", file=sys.stderr)
+        return 2
+    if not console.confirm(f"Remove speakcheck from {root}?", default=args.yes):
+        return 1
+    from ..desktop import remove_command, remove_launcher
+
+    remove_launcher()
+    remove_command()
+    say("Removed the app-menu entry and the `speakcheck` command.")
+    try:
+        config = load_config(args.config or default_config_path())
+    except SpeakcheckError:
+        config = None
+    if config is not None:
+        downloads = plan_downloads(config)
+        if downloads and console.confirm("Also delete the downloaded models?", default=False):
+            for d in downloads:
+                if (path := cache_path(d)) is not None:
+                    shutil.rmtree(path, ignore_errors=True)
+                elif d.source == "ollama" and (binary := ollama.find()):
+                    with ollama.serving(binary):
+                        runner([binary, "rm", d.name], check=False)
+            say("Deleted the models.")
+        data = config.engine.data_dir
+        if data.exists() and console.confirm(f"Delete your recordings and history ({data})?", default=False):
+            shutil.rmtree(data, ignore_errors=True)
+    if is_checkout(root):
+        say(f"{root} is a git checkout: leaving the folder in place.")
+        return 0
+    say(f"Removing {root} …")
+    if os.name == "nt":  # files of the running Python can't be deleted until it exits
+        subprocess.Popen(f'cmd /c ping 127.0.0.1 -n 3 > nul & rmdir /s /q "{root}"', shell=True,
+                         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)  # fmt: skip
+    else:
+        shutil.rmtree(root, ignore_errors=True)
+    say("speakcheck is uninstalled.")
+    return 0

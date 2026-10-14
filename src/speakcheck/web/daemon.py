@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import functools
 import json
 import os
 import threading
@@ -18,11 +19,21 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from ..engine.config import ACTIONS, apply_user_settings, load_user_settings, save_user_settings
+from ..engine import hardware, profiles
+from ..engine.config import (
+    ACTIONS,
+    apply_user_settings,
+    choose_profile,
+    default_config_path,
+    load_config,
+    load_user_settings,
+    project_root,
+    save_user_settings,
+)
 from ..engine.engine import Engine, Recording
-from ..engine.session import Session
 from ..engine.errors import ProviderUnavailable, RecordingError, SpeakcheckError
 from ..engine.events import Event
+from ..engine.session import Session
 
 # Practice auto-stop: a level above SPEECH means the user started talking; staying below
 # SILENCE for `practice_auto_stop_s` afterwards ends the attempt.
@@ -230,6 +241,64 @@ class Daemon:
             self.engine.release("tts")
         self.publish("settings_changed", settings=self.settings())
         return self.settings()
+
+    # --- profiles -------------------------------------------------------------------------
+
+    MODEL_KINDS = ("stt", "phonemes", "g2p", "tts", "llm")
+
+    @functools.cached_property
+    def hardware(self) -> hardware.Hardware:
+        return hardware.detect()
+
+    def _config_path(self) -> Path:
+        return self.engine.config.source or default_config_path()
+
+    def profiles(self) -> dict[str, Any]:
+        from ..install.state import InstallState
+
+        root = project_root()
+        hw = self.hardware
+        return {
+            "current": self.engine.config.profile,
+            "recommended": profiles.recommend(hw),
+            "hardware": hw.summary(),
+            "installed_accelerator": InstallState.load(root).accelerator if root else None,
+            "config_path": str(self._config_path()),
+            "profiles": [
+                {"name": p.name, "title": p.title, "description": p.description, "gpu": p.gpu,
+                 "llm_model": p.llm_model, "accelerator": profiles.accelerator(p, hw)}
+                for p in profiles.PROFILES.values()
+            ],
+        }  # fmt: skip
+
+    def set_profile(self, name: str) -> dict[str, Any]:
+        """Switch profile now. Models load on next use; what can't happen here is listed in `needs`."""
+        from ..install import ollama
+        from ..install.download import plan_downloads
+        from ..install.wizard import downloaded
+
+        profile = profiles.get(name)
+        if self.busy or self.engine.is_recording():
+            raise SpeakcheckError("finish the current recording or analysis first")
+        root = project_root()
+        path = self._config_path()
+        choose_profile(path, name, template=root / "config.example.toml" if root else None)
+        self.engine.config = load_config(path)
+        for kind in self.MODEL_KINDS:
+            self.engine.release(kind)
+        info = self.profiles()
+        needs = []
+        accelerator = profiles.accelerator(profile, self.hardware)
+        # A GPU build also runs on the CPU; only the cpu build can't serve a GPU profile.
+        if info["installed_accelerator"] == "cpu" and accelerator != "cpu":
+            needs.append(f"This profile needs PyTorch for {accelerator}: run `speakcheck setup --profile {name}`.")
+        for d in plan_downloads(self.engine.config):
+            if d.source == "ollama" and "grammar" in self.engine.config.engine.analyzers and not ollama.has_model(d.name):
+                needs.append(f"Grammar needs its model: run `ollama pull {d.name}`.")
+            elif d.source != "ollama" and not downloaded(d):
+                needs.append(f"{d.name} downloads on first use" + (f" (~{d.approx_gb:g} GB)." if d.approx_gb else "."))
+        self.publish("settings_changed", settings=self.settings())
+        return {**info, "needs": needs}
 
     # --- background: levels, auto-stop, shortcuts -------------------------------------------
 

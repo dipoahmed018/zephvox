@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 import wave
@@ -10,17 +11,61 @@ from typing import BinaryIO
 
 import numpy as np
 
+from .capabilities import install_hint
 from .errors import AudioError
 from .models import SAMPLE_RATE
 
 
 def decode(path: Path | str, sample_rate: int = SAMPLE_RATE) -> np.ndarray:
-    """Decode any audio file ffmpeg understands into mono float32 samples."""
+    """Decode any audio file ffmpeg understands into mono float32 samples.
+
+    Our own recordings (16-bit mono WAV at the engine rate) are read directly. Anything else goes
+    through PyAV, ffmpeg's libraries as a wheel (installed with the models extra), or else the
+    `ffmpeg` program.
+    """
     path = Path(path)
     if not path.exists():
         raise AudioError(f"Audio file not found: {path}")
+    if (samples := _read_plain_wav(path, sample_rate)) is not None:
+        return samples
+    if importlib.util.find_spec("av") is not None:
+        return _decode_pyav(path, sample_rate)
+    return _decode_ffmpeg(path, sample_rate)
+
+
+def _read_plain_wav(path: Path, sample_rate: int) -> np.ndarray | None:
+    """Samples of a 16-bit mono PCM WAV at `sample_rate`; None for any other file."""
+    try:
+        with wave.open(str(path), "rb") as f:
+            if (f.getnchannels(), f.getsampwidth(), f.getframerate()) != (1, 2, sample_rate):
+                return None
+            pcm = f.readframes(f.getnframes())
+    except (wave.Error, EOFError):
+        return None
+    return np.frombuffer(pcm, dtype="<i2").astype(np.float32) / 32768.0
+
+
+def _decode_pyav(path: Path, sample_rate: int) -> np.ndarray:
+    import av
+
+    try:
+        with av.open(str(path)) as container:
+            if not container.streams.audio:
+                raise AudioError(f"No audio in {path}")
+            resampler = av.AudioResampler(format="flt", layout="mono", rate=sample_rate)
+            chunks = []
+            for frame in container.decode(container.streams.audio[0]):
+                chunks += [out.to_ndarray().reshape(-1) for out in resampler.resample(frame)]
+            chunks += [out.to_ndarray().reshape(-1) for out in resampler.resample(None)]  # flush
+    except av.error.FFmpegError as e:
+        raise AudioError(f"Could not decode {path}: {e}") from e
+    return np.concatenate(chunks).astype(np.float32) if chunks else np.zeros(0, np.float32)
+
+
+def _decode_ffmpeg(path: Path, sample_rate: int) -> np.ndarray:
     if shutil.which("ffmpeg") is None:
-        raise AudioError("ffmpeg is required to read audio files")
+        raise AudioError(f"Reading {path.suffix or 'this'} files needs the models extra, or ffmpeg "
+                         f"({install_hint('ffmpeg')})")  # fmt: skip
     cmd = [
         "ffmpeg", "-nostdin", "-v", "error", "-i", str(path),
         "-f", "f32le", "-ac", "1", "-ar", str(sample_rate), "-",

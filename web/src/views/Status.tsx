@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { AnalyzerToggles } from "../components/AnalyzerToggles";
 import { MicSelect } from "../components/MicSelect";
+import { ProfileCard } from "../components/ProfileCard";
 import { VoiceSelect } from "../components/VoiceSelect";
 import { useAction, useEngine } from "../engine";
 import type { Status as StatusData } from "../types";
@@ -114,6 +115,7 @@ export function Status() {
           </div>
         </div>
         <div className="stack">
+          <ProfileCard />
           <div className="card">
             <div className="card-title">
               <Cpu size={18} color="var(--accent)" />
@@ -162,7 +164,8 @@ export function Status() {
               <p className="muted">Checking drivers…</p>
             )}
             <p className="faint" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
-              ★ in use · ✗ unavailable (hover for why). Change drivers in <code>~/.config/speakcheck/config.toml</code>.
+              ★ in use · ✗ unavailable (hover for why). Change drivers in <code>config.toml</code> in the speakcheck
+              folder (see <code>config.example.toml</code>).
             </p>
           </div>
         </div>

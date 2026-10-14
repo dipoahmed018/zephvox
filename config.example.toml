@@ -1,0 +1,104 @@
+# speakcheck configuration.
+#
+#   cp config.example.toml config.toml
+#
+# config.toml is git-ignored, so your local choices are never committed. Everything below is
+# commented out and shows the default: uncomment only what you want to change.
+#
+# `speakcheck setup` writes the chosen profile on the first line: large, standard, small, cpu or cpu-light.
+# A profile changes some of the defaults below (model sizes, CPU vs GPU); anything you set here wins.
+# Secrets and machine-specific environment variables go in .env (see .env.example).
+# Choices made in the web GUI (microphone, voice, analyzers) are saved separately and win over this file.
+
+[engine]
+# analyzers = ["pronunciation", "grammar"]
+# data_dir = "~/.local/share/speakcheck"   # sessions and recordings (default: your OS's app-data folder)
+# sentence_split = true
+# practice_auto_stop_s = 1.2               # practice stops after this much silence (0 = manual stop only)
+# practice_max_s = 10.0
+
+# Drivers for each stage, in order of preference: the first available one is used.
+# Run `uv run speakcheck providers` to see which are available and why the others are not.
+[providers]
+# capture = ["pipewire", "sounddevice"]    # Windows/macOS: ["sounddevice"]
+# stt = ["hf-whisper", "faster-whisper"]
+# g2p = ["chain"]
+# phonemes = ["wav2vec2"]
+# llm = ["openai-compat"]
+# tts = ["kokoro", "espeak-ng"]
+# triggers = ["portal", "pynput"]          # Windows/macOS: ["pynput"]
+
+[shortcuts]
+# toggle_recording = "Ctrl+Shift+Alt+R"
+# practice_attempt = "Ctrl+Shift+Alt+P"
+# cancel = "Ctrl+Shift+Alt+X"
+
+# --- speech recognition -----------------------------------------------------------------
+
+[provider.hf-whisper]
+# model = "openai/whisper-large-v3-turbo"
+# device = "auto"          # auto = NVIDIA/AMD GPU, then Apple GPU, then CPU; or "cpu", "cuda:1", "mps"
+# language = "en"
+# max_piece_s = 28.0
+
+[provider.faster-whisper]
+# model = "small.en"
+# device = "cpu"           # "cuda" on NVIDIA if CUDA 12 + cuDNN 9 libraries are installed
+# compute_type = "int8"    # "float16" on GPU
+# beam_size = 5
+# vad_filter = true
+
+# --- pronunciation ----------------------------------------------------------------------
+
+[provider.chain]
+# order = ["cmudict", "espeak"]   # UK English: ["espeak"] plus language = "en-gb" below
+
+[provider.espeak]
+# language = "en-us"              # or "en-gb"
+
+[provider.wav2vec2]
+# model = "facebook/wav2vec2-lv-60-espeak-cv-ft"
+# device = "auto"
+# english_only = true
+
+[analyzer.pronunciation]
+# threshold = 0.3            # higher = stricter about what counts as a mistake
+# flag_major_errors = true   # always flag a full substitution or missing sound (e.g. θ→s)
+# accept_non_rhotic = true   # accept British-style r-dropping ("car" as /kɑ/)
+# min_phones = 2
+
+[analyzer.practice]
+# pass_score = 85
+# different_word_score = 30
+
+# --- grammar ----------------------------------------------------------------------------
+
+[provider.openai-compat]
+# base_url = "http://localhost:11434/v1"   # Ollama; also llama.cpp, vLLM, LM Studio, cloud APIs
+# model = "qwen3:8b"                       # qwen3:14b fits in 16 GB of VRAM
+# api_key_env = "OPENAI_API_KEY"           # for cloud endpoints: the NAME of the variable in .env
+# autostart = true                         # run `ollama serve` only during analysis
+# serve_command = ["ollama", "serve"]
+# max_tokens = 2048
+# timeout = 300.0
+
+[analyzer.grammar]
+# min_confidence = 0.85   # lower = more (and less certain) grammar findings
+# batch_size = 5
+
+# --- practice voices and audio ----------------------------------------------------------
+
+[provider.kokoro]
+# voice = "af_heart"
+# speed = 0.9
+# device = "cpu"
+
+[provider.espeak-ng]
+# voice = "en-us"
+# speed = 140
+
+[provider.sounddevice]
+# device = "Microphone name"   # see the GUI's microphone list; default = system default
+
+[provider.pipewire]
+# device = "alsa_input.usb-..."  # PipeWire node name; default = default microphone

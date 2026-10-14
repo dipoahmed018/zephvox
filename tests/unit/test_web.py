@@ -521,3 +521,46 @@ def test_reanalyze_session_in_place(api, daemon, wav_file):
     result = daemon.engine.sessions.load_result(daemon.engine.sessions.get(first.session_id))
     assert result.analyzers == ["pronunciation"] and len(daemon.engine.sessions.list()) == 1
     assert api.post("/api/sessions/nope/analyze", json={}).status_code == 404
+
+
+class TestProfilesApi:
+    @pytest.fixture
+    def setup(self, daemon, tmp_path, monkeypatch):
+        from speakcheck.engine.hardware import GPU, Hardware
+        from speakcheck.web import daemon as daemon_mod
+
+        path = tmp_path / "config.toml"
+        path.write_text(f'[engine]\ndata_dir = "{tmp_path / "data"}"\n')
+        daemon.engine.config.source = path
+        daemon.__dict__["hardware"] = Hardware("linux", "x86_64", "CPU", 8, 32.0, 100.0,
+                                               [GPU("nvidia", "RTX", 12.0, "cuda")])  # fmt: skip
+        monkeypatch.setattr(daemon_mod, "project_root", lambda: None)
+        return path
+
+    def test_list_and_switch(self, api, daemon, setup):
+        info = api.get("/api/profiles").json()
+        assert info["current"] is None and info["recommended"] == "standard"
+        assert [p["name"] for p in info["profiles"]] == ["large", "standard", "small", "cpu", "cpu-light"]
+        assert info["config_path"] == str(setup)
+        resp = api.put("/api/profile", json={"name": "small"})
+        assert resp.status_code == 200 and resp.json()["current"] == "small"
+        assert 'profile = "small"' in setup.read_text()
+        assert daemon.engine.config.provider_settings("openai-compat")["model"] == "qwen3:4b"
+        assert any(t == "settings_changed" for t, _ in daemon.published)
+
+    def test_unknown_profile_and_busy(self, api, daemon, setup, monkeypatch):
+        assert api.put("/api/profile", json={"name": "huge"}).status_code == 409
+        monkeypatch.setattr(type(daemon), "busy", property(lambda self: True))
+        resp = api.put("/api/profile", json={"name": "cpu"})
+        assert resp.status_code == 409 and "finish" in resp.json()["detail"]
+
+    def test_cpu_install_needs_setup_for_a_gpu_profile(self, api, daemon, setup, monkeypatch, tmp_path):
+        from speakcheck.install.state import InstallState
+        from speakcheck.web import daemon as daemon_mod
+
+        InstallState("cpu", ["models", "cpu"]).save(tmp_path)
+        monkeypatch.setattr(daemon_mod, "project_root", lambda: tmp_path)
+        needs = api.put("/api/profile", json={"name": "large"}).json()["needs"]
+        assert any("setup --profile large" in n for n in needs)
+        needs = api.put("/api/profile", json={"name": "cpu"}).json()["needs"]
+        assert not any("PyTorch" in n for n in needs)

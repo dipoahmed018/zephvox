@@ -9,17 +9,29 @@ dependencies = [
     "httpx>=0.27",
     "pydantic>=2.7",
     "cmudict>=1.0",
+    "platformdirs>=4.2",
 ]
 
 [project.optional-dependencies]
 # Heavy model runtimes are optional so the engine core (and unit tests) stay light.
+# `models` needs exactly one PyTorch build next to it: `cpu`, `cuda` or `rocm`.
 models = [
-    "torch>=2.6",
-    # Companion of the ROCm torch build; listed so it can be pinned to the PyTorch index.
-    "triton-rocm; sys_platform == 'linux'",
     "transformers>=4.56",
     "faster-whisper>=1.1",
     "phonemizer>=3.3",
+    # espeak-ng library + data as a wheel (Linux, Windows, macOS): no system install needed.
+    "espeakng-loader>=0.2.4",
+    # ffmpeg's libraries as a wheel, to read any audio file (also needed by faster-whisper).
+    "av>=12",
+]
+
+# PyTorch builds (pick one). `cpu` is also the right one on macOS: it uses the Apple GPU (MPS).
+cpu = ["torch>=2.6"]
+cuda = ["torch>=2.6"]  # NVIDIA, Linux and Windows
+rocm = [
+    "torch>=2.6",
+    # Companion of the ROCm torch build; listed so it can be pinned to the PyTorch index.
+    "triton-rocm; sys_platform == 'linux' and platform_machine == 'x86_64'",
 ]
 
 # Cross-platform microphone capture and global shortcuts.
@@ -29,7 +41,11 @@ desktop = [
     "dbus-fast>=2.0; sys_platform == 'linux'",
 ]
 # Natural reference voices for practice.
-voice = ["kokoro>=0.9"]
+voice = [
+    "kokoro>=0.9",
+    # spaCy model Kokoro's text front end needs; it would otherwise try to pip-install it at runtime.
+    "en-core-web-sm>=3.8",
+]
 # Local daemon + web GUI (`speakcheck serve`).
 web = ["fastapi>=0.115", "uvicorn>=0.30", "python-multipart>=0.0.9"]
 
@@ -86,10 +102,33 @@ packages = ["src/speakcheck"]
 
 [tool.uv]
 default-groups = ["dev"]
+conflicts = [[{ extra = "cpu" }, { extra = "cuda" }, { extra = "rocm" }]]
+environments = [
+    "sys_platform == 'linux' and platform_machine == 'x86_64'",
+    "sys_platform == 'linux' and platform_machine == 'aarch64'",
+    "sys_platform == 'win32' and platform_machine == 'AMD64'",
+    "sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 
 [tool.uv.sources]
-torch = { index = "pytorch-rocm" }
-triton-rocm = { index = "pytorch-rocm" }
+# macOS takes torch from PyPI (its only build, with Apple GPU support).
+torch = [
+    { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform != 'darwin'" },
+    { index = "pytorch-cuda", extra = "cuda", marker = "sys_platform != 'darwin'" },
+    { index = "pytorch-rocm", extra = "rocm", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+]
+triton-rocm = { index = "pytorch-rocm", extra = "rocm" }
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-rocm"

@@ -39,6 +39,10 @@ class TargetBody(BaseModel):
     session_id: str | None = None
 
 
+class ProfileBody(BaseModel):
+    name: str
+
+
 class SettingsBody(BaseModel):
     capture: dict[str, Any] | None = None
     tts: dict[str, Any] | None = None
@@ -102,6 +106,14 @@ def create_app(daemon: Daemon) -> FastAPI:
     @app.put("/api/settings")
     def put_settings(body: SettingsBody):
         return guard(daemon.update_settings, body.model_dump(exclude_none=True))
+
+    @app.get("/api/profiles")
+    def get_profiles():
+        return daemon.profiles()
+
+    @app.put("/api/profile")
+    def put_profile(body: ProfileBody):
+        return guard(daemon.set_profile, body.name)
 
     @app.get("/api/voices")
     def voices():

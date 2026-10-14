@@ -1,3 +1,5 @@
+import wave
+
 import numpy as np
 import pytest
 
@@ -92,16 +94,44 @@ class TestAudio:
         with pytest.raises(AudioError, match="not found"):
             audio.decode(tmp_path / "nope.wav")
 
-    def test_undecodable_file(self, tmp_path):
+    def test_own_recordings_need_no_decoder(self, tmp_path, monkeypatch):
+        path = tmp_path / "rec.wav"
+        audio.write_wav(path, np.full(800, 0.25, dtype=np.float32))
+        monkeypatch.setattr(audio.importlib.util, "find_spec", lambda _: None)
+        monkeypatch.setattr(audio.shutil, "which", lambda _: None)
+        assert np.allclose(audio.decode(path), 0.25, atol=1e-4)
+
+    def test_other_files_are_resampled_to_mono(self, tmp_path):
+        pytest.importorskip("av")
+        path = tmp_path / "stereo44.wav"
+        stereo = (np.full((44100, 2), 0.5) * 32767).astype("<i2")
+        with wave.open(str(path), "wb") as f:
+            f.setnchannels(2), f.setsampwidth(2), f.setframerate(44100)
+            f.writeframes(stereo.tobytes())
+        decoded = audio.decode(path)
+        assert abs(len(decoded) - 16000) <= 16 and decoded.dtype == np.float32
+        assert np.allclose(decoded[100:-100], 0.5 * np.sqrt(2), atol=1e-2)  # ffmpeg's downmix: each channel at -3 dB
+
+    @pytest.mark.parametrize("backend", ["pyav", "ffmpeg"])
+    def test_undecodable_file(self, tmp_path, monkeypatch, backend):
+        if backend == "pyav":
+            pytest.importorskip("av")
+        else:
+            if audio.shutil.which("ffmpeg") is None:
+                pytest.skip("ffmpeg not installed")
+            monkeypatch.setattr(audio.importlib.util, "find_spec", lambda _: None)
         bad = tmp_path / "bad.wav"
         bad.write_bytes(b"not audio")
-        with pytest.raises(AudioError, match="could not decode"):
+        with pytest.raises(AudioError, match="(?i)could not decode"):
             audio.decode(bad)
 
-    def test_requires_ffmpeg(self, tmp_path, monkeypatch, wav_file):
+    def test_needs_pyav_or_ffmpeg_for_other_files(self, tmp_path, monkeypatch):
+        path = tmp_path / "talk.mp3"
+        path.write_bytes(b"ID3")
+        monkeypatch.setattr(audio.importlib.util, "find_spec", lambda _: None)
         monkeypatch.setattr(audio.shutil, "which", lambda _: None)
-        with pytest.raises(AudioError, match="ffmpeg"):
-            audio.decode(wav_file)
+        with pytest.raises(AudioError, match="models extra, or ffmpeg"):
+            audio.decode(path)
 
 
 def test_event_bus_filters_and_unsubscribes():

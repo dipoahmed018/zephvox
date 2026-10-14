@@ -17,3 +17,8 @@ tests/fixtures/*.wav
 
 # TypeScript build cache
 web/*.tsbuildinfo
+
+# Local configuration (templates: config.example.toml, .env.example)
+/config.toml
+.env
+/.install.json

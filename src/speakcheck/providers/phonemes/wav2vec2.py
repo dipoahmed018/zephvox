@@ -9,7 +9,7 @@ import numpy as np
 
 from ...engine.phonemes import ENGLISH_PHONES, normalize_phone
 from .._torch import quiet_transformers, resolve_device
-from ..base import Availability, PhonemeRecognizer, ProviderSettings
+from ..base import Availability, Download, PhonemeRecognizer, ProviderSettings
 
 
 class Wav2Vec2PhonemeRecognizer(PhonemeRecognizer):
@@ -29,8 +29,12 @@ class Wav2Vec2PhonemeRecognizer(PhonemeRecognizer):
     def check_available(self) -> Availability:
         for module in ("torch", "transformers"):
             if importlib.util.find_spec(module) is None:
-                return Availability(False, f"python package {module!r} not installed (uv sync --extra models)")
+                return Availability(False, f"python package {module!r} not installed (uv sync --extra models --extra cpu|cuda|rocm)")
         return Availability(True)
+
+    def downloads(self) -> list[Download]:
+        approx = 1.3 if self.settings.model == "facebook/wav2vec2-lv-60-espeak-cv-ft" else None
+        return [Download("huggingface", self.settings.model, approx, ("*.json", "*.txt", "*.bin", "*.safetensors"))]
 
     def capabilities(self) -> dict[str, Any]:
         return {"phoneme_set": "canonical-ipa", "multilingual": True, "gpu": True}

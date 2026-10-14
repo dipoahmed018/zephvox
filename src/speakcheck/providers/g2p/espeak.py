@@ -1,13 +1,32 @@
-"""espeak-ng rules via `phonemizer`: covers any word (names, numbers, new words) and UK English."""
+"""espeak-ng rules via `phonemizer`: covers any word (names, numbers, new words) and UK English.
+
+Uses the espeak-ng library bundled in the `espeakng-loader` wheel (Linux, Windows, macOS), so no
+system install is needed and every machine gets the same version. `PHONEMIZER_ESPEAK_LIBRARY`
+picks another copy; without either, phonemizer looks for a system espeak-ng.
+"""
 
 from __future__ import annotations
 
 import importlib.util
+import os
 from typing import Any
 
+from ...engine.capabilities import install_hint
 from ...engine.models import Pronunciation
 from ...engine.phonemes import normalize
 from ..base import Availability, G2PProvider, ProviderSettings
+
+
+def use_bundled_espeak() -> bool:
+    """Point phonemizer at the bundled espeak-ng unless the user chose a library. True if bundled."""
+    if os.environ.get("PHONEMIZER_ESPEAK_LIBRARY") or importlib.util.find_spec("espeakng_loader") is None:
+        return False
+    import espeakng_loader
+    from phonemizer.backend.espeak.wrapper import EspeakWrapper
+
+    EspeakWrapper.set_library(espeakng_loader.get_library_path())
+    EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
+    return True
 
 
 class EspeakG2P(G2PProvider):
@@ -19,18 +38,21 @@ class EspeakG2P(G2PProvider):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._backend = None
+        self._bundled = False
 
     def check_available(self) -> Availability:
         if importlib.util.find_spec("phonemizer") is None:
             return Availability(False, "python package 'phonemizer' not installed (uv sync --extra models)")
+        self._bundled = use_bundled_espeak()
         from phonemizer.backend import EspeakBackend
 
         if not EspeakBackend.is_available():
-            return Availability(False, "espeak-ng not installed (sudo pacman -S espeak-ng)")
+            return Availability(False, f"espeak-ng not installed ({install_hint('espeak-ng')})")
         return Availability(True)
 
     def capabilities(self) -> dict[str, Any]:
-        return {"accents": ["en-us", "en-gb"], "variants": False, "phoneme_set": "canonical-ipa"}
+        return {"accents": ["en-us", "en-gb"], "variants": False, "phoneme_set": "canonical-ipa",
+                "library": "bundled" if self._bundled else "system"}  # fmt: skip
 
     def pronounce(self, words: list[str]) -> dict[str, Pronunciation]:
         if not words:

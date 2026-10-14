@@ -14,7 +14,8 @@ from urllib.parse import urlparse
 import httpx
 
 from ...engine.errors import LLMError
-from ..base import Availability, LLMProvider, ProviderSettings
+from ...engine.capabilities import which
+from ..base import Availability, Download, LLMProvider, ProviderSettings
 
 _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
@@ -29,6 +30,9 @@ def parse_json_reply(content: str) -> dict[str, Any]:
     if not isinstance(data, dict):
         raise LLMError(f"LLM returned JSON {type(data).__name__}, expected an object")
     return data
+
+
+OLLAMA_APPROX_GB = {"qwen3:4b": 2.5, "qwen3:8b": 5.2, "qwen3:14b": 9.3, "qwen3:32b": 20.0}
 
 
 class OpenAICompatLLM(LLMProvider):
@@ -79,6 +83,18 @@ class OpenAICompatLLM(LLMProvider):
             return f"model {self.settings.model!r} not available (for Ollama: ollama pull {self.settings.model})"
         return None
 
+    def _is_local_ollama(self) -> bool:
+        url = urlparse(self.settings.base_url)
+        return url.hostname in ("localhost", "127.0.0.1", "::1") and (
+            url.port == 11434 or os.path.basename(self.settings.serve_command[0] if self.settings.serve_command else "")
+            == "ollama"
+        )
+
+    def downloads(self) -> list[Download]:
+        if not self._is_local_ollama():
+            return []
+        return [Download("ollama", self.settings.model, OLLAMA_APPROX_GB.get(self.settings.model))]
+
     def _can_autostart(self) -> bool:
         host = urlparse(self.settings.base_url).hostname
         return (
@@ -122,8 +138,10 @@ class OpenAICompatLLM(LLMProvider):
             url = urlparse(self.settings.base_url)
             env["OLLAMA_HOST"] = f"{url.hostname}:{url.port or 11434}"
         log = tempfile.TemporaryFile()
+        command = [which(self.settings.serve_command[0]) or self.settings.serve_command[0],
+                   *self.settings.serve_command[1:]]  # fmt: skip
         self._proc = subprocess.Popen(
-            self.settings.serve_command, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True
+            command, stdout=log, stderr=subprocess.STDOUT, env=env, start_new_session=True
         )
         deadline = time.monotonic() + self.settings.start_timeout
         while True:

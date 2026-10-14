@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 
 from ...engine.errors import SpeakcheckError
-from ..base import Availability, ProviderSettings, TTSProvider
+from ..base import Availability, Download, ProviderSettings, TTSProvider
 
 SAMPLE_RATE = 24_000
 
@@ -42,6 +42,10 @@ class KokoroTTS(TTSProvider):
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
         self._pipelines: dict[str, Any] = {}
+
+    def downloads(self) -> list[Download]:
+        patterns = ("config.json", "kokoro-v1_0.pth", f"voices/{self.settings.voice}.pt")
+        return [Download("huggingface", self.settings.repo_id, 0.33, patterns)]
 
     def check_available(self) -> Availability:
         if importlib.util.find_spec("kokoro") is None:

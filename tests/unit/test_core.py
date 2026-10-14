@@ -7,9 +7,10 @@ from types import SimpleNamespace
 import pytest
 
 from speakcheck.engine import capabilities
+from speakcheck.engine import config as config_mod
 from speakcheck.engine.artifacts import ArtifactRegistry, ArtifactSpec, ArtifactStore
 from speakcheck.engine.capabilities import SystemCapabilities, detect, detect_ram_gb
-from speakcheck.engine.config import Config, load_config
+from speakcheck.engine.config import Config, load_config, load_env, parse_env, project_root
 from speakcheck.engine.errors import ConfigError, PlanError, PluginNotFound, SpeakcheckError
 from speakcheck.engine.models import AnalysisResult, Finding
 from speakcheck.engine.planner import plan
@@ -135,6 +136,51 @@ class TestConfig:
         with pytest.raises(ConfigError, match="Invalid config"):
             load_config(bad)
 
+    def test_project_root_found_from_code_location(self, tmp_path):
+        assert (project_root() / "pyproject.toml").exists()
+        assert project_root(tmp_path / "src" / "speakcheck") is None  # installed as a plain package
+
+    def test_project_config_wins_over_user_config(self, tmp_path, monkeypatch):
+        monkeypatch.delenv("SPEAKCHECK_CONFIG", raising=False)
+        root, user = tmp_path / "root", tmp_path / "user"
+        root.mkdir(), user.mkdir()
+        monkeypatch.setattr(config_mod, "config_dirs", lambda: [root, user])
+        assert config_mod.default_config_path() == root / "config.toml"  # neither exists yet
+        (user / "config.toml").touch()
+        assert config_mod.default_config_path() == user / "config.toml"
+        (root / "config.toml").touch()
+        assert config_mod.default_config_path() == root / "config.toml"
+        monkeypatch.setenv("SPEAKCHECK_CONFIG", str(tmp_path / "x.toml"))
+        assert config_mod.default_config_path() == tmp_path / "x.toml"
+
+    def test_example_config_loads(self, tmp_path):
+        example = (project_root() / "config.example.toml").read_text()
+        assert load_config(project_root() / "config.example.toml").providers == Config().providers
+        # Every commented-out setting is valid once uncommented.
+        uncommented = "\n".join(line.removeprefix("# ") if line.startswith("# ") and "=" in line else line
+                                for line in example.splitlines())  # fmt: skip
+        path = tmp_path / "c.toml"
+        path.write_text(uncommented)
+        c = load_config(path)
+        assert c.provider_settings("hf-whisper")["device"] == "auto"
+        assert c.analyzer_settings("pronunciation")["threshold"] == 0.3
+
+    def test_parse_env(self):
+        text = '# comment\n\nA=1\nexport B = two words\nC="quoted # not a comment"\nD=x # note\nbad line\n=x\n'
+        assert parse_env(text) == {"A": "1", "B": "two words", "C": "quoted # not a comment", "D": "x"}
+
+    def test_load_env_never_overrides(self, tmp_path, monkeypatch):
+        first, second, empty = tmp_path / "a", tmp_path / "b", tmp_path / "c"
+        for d in (first, second, empty):
+            d.mkdir()
+        (first / ".env").write_text("SC_T1=project\nSC_T2=project\n")
+        (second / ".env").write_text("SC_T2=user\nSC_T3=user\n")
+        monkeypatch.setenv("SC_T1", "shell")
+        monkeypatch.delenv("SC_T2", raising=False)
+        monkeypatch.delenv("SC_T3", raising=False)
+        assert load_env([first, empty, second]) == [first / ".env", second / ".env"]
+        assert [config_mod.os.environ[k] for k in ("SC_T1", "SC_T2", "SC_T3")] == ["shell", "project", "user"]
+
     def test_overrides(self):
         c = Config().with_overrides(["stt=faster-whisper", "g2p = cmudict, espeak"])
         assert c.providers["stt"] == ["faster-whisper"]
@@ -169,6 +215,35 @@ class TestCapabilities:
         assert caps.has_binary("x") is True  # cached
         assert SystemCapabilities.has_module("json") and not SystemCapabilities.has_module("no_such_mod")
 
+    def test_ram_from_os_when_no_proc(self, monkeypatch):
+        monkeypatch.setattr(capabilities, "_ram_from_os", lambda: 8.0)
+        monkeypatch.setattr(capabilities.Path, "read_text", lambda self: (_ for _ in ()).throw(OSError()))
+        assert detect_ram_gb() == 8.0
+
+    def test_which_searches_installer_folders(self, monkeypatch, tmp_path):
+        monkeypatch.setitem(capabilities.EXTRA_BINARY_DIRS, "tool", [tmp_path])
+        monkeypatch.setattr(capabilities.shutil, "which",
+                            lambda n, path=None: str(tmp_path / n) if path == str(tmp_path) else None)  # fmt: skip
+        assert capabilities.which("tool") == str(tmp_path / "tool")
+        assert capabilities.which("other") is None
+
+    def test_setup_hints(self, monkeypatch):
+        monkeypatch.setattr(capabilities, "detect_accelerator", lambda: "cuda")
+        monkeypatch.setattr(capabilities, "platform_key", lambda: "darwin")
+        caps = SystemCapabilities(binaries={"espeak-ng": False, "ffmpeg": False, "ollama": True})
+        modules = set()
+        monkeypatch.setattr(SystemCapabilities, "has_module", staticmethod(lambda n: n in modules))
+        hints = caps.setup_hints()
+        assert hints[0].startswith("speech models: uv sync --extra models --extra cuda")
+        assert hints[1:] == ["ffmpeg (audio files other than WAV): brew install ffmpeg"]  # espeak: models extra
+        modules.add("torch")
+        hints = caps.setup_hints()
+        assert "reinstall" in hints[0]  # torch installed but blind to the GPU
+        assert "espeak-ng: brew install espeak-ng" in hints  # models installed without the bundled copy
+        modules.update({"espeakng_loader", "av"})
+        caps.gpu = capabilities.GPUInfo("cuda", "RTX", 8.0)
+        assert caps.setup_hints() == []  # nothing left to install
+
     def test_gpu_detection_paths(self, monkeypatch):
         props = SimpleNamespace(total_memory=16e9)
         fake_cuda = SimpleNamespace(is_available=lambda: True, get_device_properties=lambda i: props,
@@ -183,6 +258,9 @@ class TestCapabilities:
         assert capabilities.detect_gpu().backend == "cuda"
         fake_cuda.is_available = lambda: False
         assert capabilities.detect_gpu() is None
+        fake_torch.backends = SimpleNamespace(mps=SimpleNamespace(is_available=lambda: True))
+        assert capabilities.detect_gpu().backend == "mps"
+        fake_torch.backends.mps.is_available = lambda: False
         fake_cuda.is_available = lambda: 1 / 0
         assert capabilities.detect_gpu() is None
         monkeypatch.setattr(capabilities.importlib.util, "find_spec", lambda n: None)

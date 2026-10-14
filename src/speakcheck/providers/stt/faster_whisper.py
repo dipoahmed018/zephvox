@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from ...engine.models import Segment, Transcript, Word
-from ..base import Availability, ProviderSettings, STTProvider
+from ..base import Availability, Download, ProviderSettings, STTProvider
 
 # Priming Whisper with disfluent text makes it keep fillers and false starts instead of
 # tidying them away — which also makes it less likely to silently fix grammar.
@@ -34,6 +34,10 @@ class FasterWhisperSTT(STTProvider):
         if importlib.util.find_spec("faster_whisper") is None:
             return Availability(False, "python package 'faster_whisper' not installed (uv sync --extra models)")
         return Availability(True)
+
+    def downloads(self) -> list[Download]:
+        approx = {"base.en": 0.15, "small.en": 0.5, "medium.en": 1.5, "large-v3": 3.1}.get(self.settings.model)
+        return [Download("faster-whisper", self.settings.model, approx)]
 
     def capabilities(self) -> dict[str, Any]:
         verbatim = "partial" if self.settings.initial_prompt else "none"

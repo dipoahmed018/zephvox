@@ -251,7 +251,8 @@ class TestEspeakTTS:
         tts = EspeakTTS({"speed": 120}, Services(SystemCapabilities(binaries={"espeak-ng": True})))
         assert tts.check_available().ok and tts.capabilities()["voice"] == "en-us"
         assert tts.synthesize("think") == b"RIFFdata"
-        assert seen["cmd"] == ["espeak-ng", "-v", "en-us", "-s", "120", "--stdout", "think"]
+        assert seen["cmd"][0].endswith("espeak-ng")  # full path when found (Windows: not on PATH)
+        assert seen["cmd"][1:] == ["-v", "en-us", "-s", "120", "--stdout", "think"]
 
     def test_failure_and_unavailable(self, monkeypatch):
         monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1, stdout=b"", stderr=b"bad"))

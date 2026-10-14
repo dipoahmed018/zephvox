@@ -8,11 +8,12 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from .engine.config import Config, load_config
+from .engine.config import Config, config_dirs, default_config_path, load_config, load_env
 from .engine.engine import Engine
 from .engine.errors import SpeakcheckError
 from .engine.events import Event
 from .engine.models import AnalysisResult
+from .engine.profiles import PROFILES
 from .web.client import DaemonError, call, find_daemon
 
 EngineFactory = Callable[[Config], Engine]
@@ -20,7 +21,7 @@ EngineFactory = Callable[[Config], Engine]
 
 def _parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--config", type=Path, help="config file (default: ~/.config/speakcheck/config.toml)")
+    common.add_argument("--config", type=Path, help="config file (default: config.toml in the project root)")
     common.add_argument("--set", action="append", default=[], metavar="KIND=NAME",
                         help="choose a provider, e.g. --set stt=faster-whisper (repeatable)")  # fmt: skip
     common.add_argument("-q", "--quiet", action="store_true", help="no progress output")
@@ -47,7 +48,21 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("--open", action="store_true", help="open the page in your browser")
     s.add_argument("--no-shortcuts", action="store_true", help="don't register global shortcuts")
     sub.add_parser("desktop-entry", parents=[common],
-                   help="Linux: add speakcheck to the app menu (also names its global shortcuts)")  # fmt: skip
+                   help="add speakcheck to the app menu (Linux: also names its global shortcuts)")  # fmt: skip
+    st = sub.add_parser("setup", parents=[common], help="detect this machine, choose a profile, install models")
+    st.add_argument("--profile", choices=list(PROFILES), help="skip the question and use this profile")
+    st.add_argument("--accelerator", choices=["cpu", "cuda", "rocm"], help="PyTorch build (default: detected)")
+    st.add_argument("-y", "--yes", action="store_true", help="accept every default without asking")
+    st.add_argument("--no-download", action="store_true", help="download models on first use instead")
+    st.add_argument("--no-ollama", action="store_true", help="don't install Ollama (grammar stays off)")
+    st.add_argument("--no-launcher", action="store_true", help="don't add an app-menu entry")
+    st.add_argument("--no-verify", action="store_true", help="skip the test analysis")
+    st.add_argument("--dry-run", action="store_true", help="show what would be installed, change nothing")
+    st.add_argument("--installed-version", help=argparse.SUPPRESS)  # passed by the install script
+    up = sub.add_parser("update", parents=[common], help="install the latest release")
+    up.add_argument("--force", action="store_true", help="reinstall even if up to date")
+    un = sub.add_parser("uninstall", parents=[common], help="remove speakcheck (asks about models and recordings)")
+    un.add_argument("-y", "--yes", action="store_true", help="remove without asking (keeps models and recordings)")
     sub.add_parser("providers", parents=[common], help="list providers and whether they can run here")
     sub.add_parser("doctor", parents=[common], help="system + plugin diagnostics as JSON")
     h = sub.add_parser("history", parents=[common], help="your most frequent mistakes")
@@ -131,9 +146,9 @@ def run(args: argparse.Namespace, engine: Engine, ask: Callable[[str], str]) -> 
             cmd = "stop"
             args.analyzers, args.format, args.output = None, "terminal", None
     if cmd == "desktop-entry":
-        from .desktop import install
+        from .desktop import install_launcher
 
-        print(f"Installed {install()}")
+        print(f"Installed {install_launcher()}")
     elif cmd == "serve":
         from .web.server import serve
 
@@ -167,8 +182,17 @@ def run(args: argparse.Namespace, engine: Engine, ask: Callable[[str], str]) -> 
             reason = f"  — {s.reason}" if s.reason else ""
             print(f"{mark} {s.kind:<9} {s.name:<16}{reason}")
         print("\n★ selected  ✓ available  ✗ unavailable")
+        if hints := engine.caps.setup_hints():
+            print("\nTo get more working:")
+            for hint in hints:
+                print(f"  · {hint}")
     elif cmd == "doctor":
-        print(json.dumps(engine.doctor(), indent=2, ensure_ascii=False))
+        report = engine.doctor()
+        report["config"] = {
+            "file": str(args.config or default_config_path()),
+            "env_files": [str(d / ".env") for d in config_dirs() if (d / ".env").exists()],
+        }
+        print(json.dumps(report, indent=2, ensure_ascii=False))
     elif cmd == "history":
         h = engine.history(args.limit)
         print(f"{h['sessions']} analyzed session(s)")
@@ -183,6 +207,15 @@ def run(args: argparse.Namespace, engine: Engine, ask: Callable[[str], str]) -> 
 def main(argv: list[str] | None = None, engine_factory: EngineFactory = Engine,
          ask: Callable[[str], str] = input) -> int:  # fmt: skip
     args = _parser().parse_args(argv)
+    load_env()  # before anything imports torch: GPU workarounds are read at import time
+    if args.command == "setup":  # these work before (or after) the engine can run
+        from .install.wizard import run_setup
+
+        return run_setup(args, ask)
+    if args.command in ("update", "uninstall"):
+        from .install import update
+
+        return update.run_update(args) if args.command == "update" else update.run_uninstall(args, ask)
     try:
         config = load_config(args.config).with_overrides(args.set)
         engine = engine_factory(config)

@@ -23,6 +23,16 @@ class ProviderSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+@dataclass(frozen=True)
+class Download:
+    """A model a provider needs, fetched by `speakcheck setup` ahead of first use."""
+
+    source: str  # "huggingface" | "faster-whisper" | "ollama"
+    name: str  # repo id, faster-whisper model name, or Ollama model
+    approx_gb: float | None = None
+    patterns: tuple[str, ...] | None = None  # huggingface: only these files
+
+
 @dataclass
 class Services:
     """What the engine offers a provider: system info and a way to build sibling providers."""
@@ -46,6 +56,10 @@ class Provider:
 
     def capabilities(self) -> dict[str, Any]:
         return {}
+
+    def downloads(self) -> list[Download]:
+        """Models this provider will fetch on first use, so setup can fetch them up front."""
+        return []
 
     def prepare(self) -> None:
         """Get ready for use; called by the engine once, right before the provider is first used.

@@ -10,7 +10,16 @@ import numpy as np
 from ...engine import audio
 from ...engine.models import Segment, Transcript, Word
 from .._torch import quiet_transformers, resolve_device
-from ..base import Availability, ProviderSettings, STTProvider
+from ..base import Availability, Download, ProviderSettings, STTProvider
+
+
+APPROX_GB = {
+    "openai/whisper-large-v3-turbo": 1.6,
+    "openai/whisper-large-v3": 3.1,
+    "openai/whisper-medium.en": 1.5,
+    "openai/whisper-small.en": 0.5,
+    "distil-whisper/distil-large-v3": 1.5,
+}
 
 
 class HFWhisperSTT(STTProvider):
@@ -31,8 +40,12 @@ class HFWhisperSTT(STTProvider):
     def check_available(self) -> Availability:
         for module in ("torch", "transformers"):
             if importlib.util.find_spec(module) is None:
-                return Availability(False, f"python package {module!r} not installed (uv sync --extra models)")
+                return Availability(False, f"python package {module!r} not installed (uv sync --extra models --extra cpu|cuda|rocm)")
         return Availability(True)
+
+    def downloads(self) -> list[Download]:
+        model = self.settings.model
+        return [Download("huggingface", model, APPROX_GB.get(model), ("*.json", "*.txt", "*.safetensors"))]
 
     def capabilities(self) -> dict[str, Any]:
         return {"word_timestamps": True, "verbatim": "none", "languages": ["multi"], "gpu": True}

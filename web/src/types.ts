@@ -139,6 +139,25 @@ export interface Settings {
   shortcuts: Record<string, string>;
 }
 
+export interface ProfileInfo {
+  name: string;
+  title: string;
+  description: string;
+  gpu: boolean;
+  llm_model: string | null;
+  accelerator: string;
+}
+
+export interface Profiles {
+  current: string | null;
+  recommended: string;
+  hardware: string[];
+  installed_accelerator: string | null;
+  config_path: string;
+  profiles: ProfileInfo[];
+  needs?: string[]; // after a switch: what still has to happen
+}
+
 export interface History {
   sessions: number;
   dismissed: number;

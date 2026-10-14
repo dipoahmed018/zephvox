@@ -1,6 +1,10 @@
 """Configuration: which plugin to use for each stage, in order of preference, plus their settings.
 
-Example `~/.config/speakcheck/config.toml`:
+The config file is `config.toml` in the project root (copy `config.example.toml`). Installed as a
+plain package, without a project folder, it is `<user config dir>/speakcheck/config.toml` instead
+(`~/.config` on Linux, `~/Library/Application Support` on macOS, `%LOCALAPPDATA%` on Windows).
+
+Example:
 
     [engine]
     analyzers = ["pronunciation", "grammar"]
@@ -19,13 +23,16 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tomllib
 from pathlib import Path
 from typing import Any
 
+import platformdirs
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from . import profiles
 from .errors import ConfigError
 
 PROVIDER_KINDS = ("capture", "stt", "g2p", "phonemes", "llm", "tts", "triggers")
@@ -35,18 +42,82 @@ ACTIONS = ("toggle_recording", "practice_attempt", "cancel")
 USER_SETTINGS_FILE = "settings.json"
 
 
+def project_root(package_dir: Path = Path(__file__).resolve().parents[1]) -> Path | None:
+    """The source checkout this package runs from (`uv sync` installs it editable), else None.
+
+    Found from the code's location, not the working directory: the daemon is often started from
+    the app menu or a global shortcut, with the home folder as working directory.
+    """
+    root = package_dir.parent.parent  # <root>/src/speakcheck
+    pyproject = root / "pyproject.toml"
+    try:
+        return root if 'name = "speakcheck"' in pyproject.read_text() else None
+    except OSError:
+        return None
+
+
+def user_config_dir() -> Path:
+    return Path(platformdirs.user_config_dir("speakcheck", appauthor=False))
+
+
+def config_dirs() -> list[Path]:
+    """Where `config.toml` and `.env` are looked up, first match first."""
+    root = project_root()
+    return [root, user_config_dir()] if root else [user_config_dir()]
+
+
 def default_config_path() -> Path:
     if env := os.environ.get("SPEAKCHECK_CONFIG"):
         return Path(env)
-    base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-    return base / "speakcheck" / "config.toml"
+    candidates = [d / "config.toml" for d in config_dirs()]
+    return next((p for p in candidates if p.exists()), candidates[0])
 
 
 def default_data_dir() -> Path:
     if env := os.environ.get("SPEAKCHECK_HOME"):
         return Path(env)
-    base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
-    return base / "speakcheck"
+    # Linux: $XDG_DATA_HOME/speakcheck (~/.local/share/speakcheck)
+    return Path(platformdirs.user_data_dir("speakcheck", appauthor=False))
+
+
+# --- .env -------------------------------------------------------------------------------
+# Machine-specific environment (API keys, GPU workarounds, model cache location). A daemon
+# started from the app menu or a shortcut does not inherit the shell's exports, so they live here.
+
+
+def parse_env(text: str) -> dict[str, str]:
+    """`KEY=value` lines; `#` comments, an `export ` prefix and surrounding quotes are allowed."""
+    values = {}
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, sep, value = line.removeprefix("export ").partition("=")
+        key, value = key.strip(), value.strip()
+        if not sep or not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+            value = value[1:-1]
+        elif " #" in value:
+            value = value.split(" #", 1)[0].rstrip()
+        values[key] = value
+    return values
+
+
+def load_env(dirs: list[Path] | None = None) -> list[Path]:
+    """Load `.env` files into the environment. Never overrides a variable that is already set
+    (so the shell wins, then the project's file, then the user's). Returns the files loaded."""
+    loaded = []
+    for d in config_dirs() if dirs is None else dirs:
+        path = d / ".env"
+        try:
+            values = parse_env(path.read_text())
+        except OSError:
+            continue
+        for key, value in values.items():
+            os.environ.setdefault(key, value)
+        loaded.append(path)
+    return loaded
 
 
 class EngineSettings(BaseModel):
@@ -88,6 +159,9 @@ def _default_shortcuts() -> dict[str, str]:
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    profile: str | None = None
+    # The file this was loaded from (not a setting): where the GUI writes a profile change.
+    source: Path | None = Field(default=None, exclude=True)
     engine: EngineSettings = Field(default_factory=EngineSettings)
     providers: dict[str, list[str]] = Field(default_factory=_default_providers)
     provider: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -125,6 +199,10 @@ def load_config(path: Path | None = None) -> Config:
     elif explicit:
         raise ConfigError(f"Config file not found: {path}")
 
+    profile = data.pop("profile", None)
+    if profile is not None:
+        data = merge(profiles.get(profile).overlay, data)
+
     # Stage lists and shortcuts in the file replace the defaults per key, not wholesale.
     providers = _default_providers()
     providers.update(data.pop("providers", {}) or {})
@@ -134,11 +212,53 @@ def load_config(path: Path | None = None) -> Config:
     if unknown:
         raise ConfigError(f"Unknown shortcut action(s) in {path}: {', '.join(sorted(unknown))}")
     try:
-        config = Config(providers=providers, shortcuts=shortcuts, **data)
+        config = Config(profile=profile, source=path, providers=providers, shortcuts=shortcuts, **data)
     except ValidationError as e:
         raise ConfigError(f"Invalid config in {path}:\n{e}") from e
     config.engine.data_dir = config.engine.data_dir.expanduser()
     return apply_user_settings(config, load_user_settings(config.engine.data_dir))
+
+
+def merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Deep-merge tables; any other value (lists included) in `override` replaces the base one."""
+    out = dict(base)
+    for key, value in override.items():
+        out[key] = merge(out[key], value) if isinstance(value, dict) and isinstance(out.get(key), dict) else value
+    return out
+
+
+PROFILE_LINE = re.compile(r"^profile\s*=.*$", re.M)
+
+
+def write_profile(path: Path, name: str, template: Path | None = None) -> None:
+    """Set `profile = "name"` in config.toml, leaving every other line as the user wrote it.
+
+    A missing file starts from `template` (config.example.toml), so its options stay documented.
+    """
+    profiles.get(name)  # validate
+    line = f'profile = "{name}"'
+    if path.exists():
+        text = path.read_text()
+    else:
+        text = template.read_text() if template and template.exists() else ""
+    head, sep, rest = text.partition("\n[")  # a top-level key must come before the first table
+    if PROFILE_LINE.search(head):
+        head = PROFILE_LINE.sub(line, head, count=1)
+    else:
+        head = f"{line}   # chosen by `speakcheck setup`: {', '.join(profiles.PROFILES)}\n\n{head}"
+    path.write_text(head + sep + rest)
+
+
+def choose_profile(path: Path, name: str, template: Path | None = None) -> None:
+    """Switch to a profile (setup or the GUI). Picking one is explicit, so the profile's analyzer
+    choice replaces one saved earlier from the GUI."""
+    write_profile(path, name, template)
+    analyzers = profiles.get(name).overlay.get("engine", {}).get("analyzers")
+    if analyzers is not None:
+        data_dir = load_config(path).engine.data_dir
+        stored = load_user_settings(data_dir)
+        if stored.pop("analyzers", None) is not None:
+            save_user_settings(data_dir, stored)
 
 
 # --- settings changed from the GUI ------------------------------------------------------
