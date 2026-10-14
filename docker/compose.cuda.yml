@@ -1,0 +1,18 @@
+# NVIDIA GPUs (needs the NVIDIA Container Toolkit). Use with compose.yml, see there.
+services:
+  speakcheck:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

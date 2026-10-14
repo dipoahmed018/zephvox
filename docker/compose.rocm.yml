@@ -1,0 +1,20 @@
+# AMD GPUs with ROCm (Linux). Use with compose.yml, see there.
+# Consumer cards may need HSA_OVERRIDE_GFX_VERSION, e.g. 10.3.0 for an RX 6000.
+services:
+  speakcheck:
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
+    environment:
+      HSA_OVERRIDE_GFX_VERSION: ${HSA_OVERRIDE_GFX_VERSION:-}
+  ollama:
+    image: ollama/ollama:rocm
+    devices:
+      - /dev/kfd
+      - /dev/dri
+    group_add:
+      - video
+    environment:
+      HSA_OVERRIDE_GFX_VERSION: ${HSA_OVERRIDE_GFX_VERSION:-}

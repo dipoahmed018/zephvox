@@ -2,6 +2,7 @@
 
 import io
 import json
+import sys
 import tarfile
 from argparse import Namespace
 from pathlib import Path
@@ -293,6 +294,7 @@ def setup_args(tmp_path, **overrides):
 def install_root(tmp_path, monkeypatch):
     root = tmp_path / "root"
     root.mkdir()
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))  # service files and launchers land here, not in ~
     (root / "config.example.toml").write_text(f'[engine]\ndata_dir = "{tmp_path / "data"}"\n')
     monkeypatch.setattr(wizard, "project_root", lambda: root)
     monkeypatch.setattr(state, "find_uv", lambda: "uv")
@@ -329,6 +331,10 @@ class TestSetup:
         assert saved.role == "server" and saved.extras == ["models", "cuda", "web", "voice"]
         (sync,) = runner.ran("uv sync")
         assert "desktop" not in sync
+        if sys.platform.startswith("linux"):
+            unit = tmp_path / "home" / ".config" / "systemd" / "user" / "speakcheck-server.service"
+            assert unit.exists() and "server serve" in unit.read_text()
+            assert runner.ran("enable --now speakcheck-server")
         # A client install becoming full: it offers to analyze locally (default yes).
         saved.role = "client"
         saved.save(install_root.path)

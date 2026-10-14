@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import shutil
 import sys
 import time
@@ -42,6 +43,12 @@ def add_parser(sub: Any, common: argparse.ArgumentParser) -> None:
     s = cmd.add_parser("serve", parents=[shared], help="run the server until Ctrl+C")
     s.add_argument("--host", help="default from [server] in config.toml (127.0.0.1); 0.0.0.0 for all interfaces")
     s.add_argument("--port", type=int, help="default 8770")
+
+    svc = cmd.add_parser("install-service", parents=[shared],
+                         help="run the server in the background, started with the computer")  # fmt: skip
+    svc.add_argument("--host", help="default from [server] in config.toml (127.0.0.1)")
+    svc.add_argument("--port", type=int)
+    cmd.add_parser("remove-service", parents=[shared], help="stop and remove the background service")
 
     acc = group("accounts", "people who may use this server")
     acc.add_parser("list", parents=[shared])
@@ -95,6 +102,21 @@ def run(args: argparse.Namespace, config: Config, ask: Callable[[str], str] = in
         clock: Callable[[], float] = time.time) -> int:  # fmt: skip
     if args.server_command == "serve":
         return serve(config, args.host, args.port)
+    if args.server_command in ("install-service", "remove-service"):
+        from . import os_service
+
+        if args.server_command == "remove-service":
+            print("Removed the speakcheck server service." if os_service.remove() else "No service was installed.")
+            return 0
+        workdir = config.source.parent if config.source else Path.cwd()
+        cmd = os_service.command(sys.executable, getattr(args, "config", None) or config.source if config.source and
+                                 config.source.exists() else None, args.host, args.port)  # fmt: skip
+        try:
+            where = os_service.install(cmd, workdir)
+        except (OSError, subprocess.CalledProcessError) as e:
+            raise SpeakcheckError(f"couldn't install the service: {e}") from e
+        print(f"The server now runs in the background: {where}")
+        return 0
     db = Database(server_dir(config) / "server.db")
     try:
         return _admin(args, config, db, ask, clock)

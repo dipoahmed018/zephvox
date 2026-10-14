@@ -331,3 +331,34 @@ class TestAdminCli:
             self.run(server, ["invite", "nobody"])
         with pytest.raises(SpeakcheckError, match="nothing to change"):
             self.run(server, ["limits", "set", "x"])
+
+
+class TestOsService:
+    def test_systemd(self, tmp_path):
+        from speakcheck.server import os_service
+
+        runner = []
+        record = lambda cmd, **kw: runner.append(cmd) or type("P", (), {"stdout": "Linger=no", "returncode": 0})()  # noqa: E731
+        cmd = os_service.command("/py", tmp_path / "config.toml", "0.0.0.0", 9000)
+        where = os_service.install(cmd, tmp_path, record, platform="linux", home=tmp_path)
+        unit = (tmp_path / ".config/systemd/user/speakcheck-server.service").read_text()
+        assert "ExecStart=/py -m speakcheck.cli server serve --config" in unit and "--port 9000" in unit
+        assert ["systemctl", "--user", "enable", "--now", "speakcheck-server"] in runner
+        assert "enable-linger" in where
+        assert os_service.remove(record, platform="linux", home=tmp_path)
+        assert not os_service.remove(record, platform="linux", home=tmp_path)
+
+    def test_macos_and_windows(self, tmp_path):
+        from speakcheck.server import os_service
+
+        runner = []
+        record = lambda cmd, **kw: runner.append(cmd) or type("P", (), {"stdout": "", "returncode": 0})()  # noqa: E731
+        cmd = os_service.command("/Applications/My Python/py", None, None, None)
+        os_service.install(cmd, tmp_path, record, platform="darwin", home=tmp_path)
+        plist = (tmp_path / "Library/LaunchAgents/com.speakcheck.server.plist").read_text()
+        assert "<string>/Applications/My Python/py</string>" in plist and "<key>KeepAlive</key>" in plist
+        os_service.install(["C:\\Program Files\\py.exe", "-m", "speakcheck.cli"], tmp_path, record, platform="win32")
+        task = runner[-2]
+        assert task[:3] == ["schtasks", "/Create", "/TN"] and '"C:\\Program Files\\py.exe" -m speakcheck.cli' in task
+        with pytest.raises(OSError):
+            os_service.install(cmd, tmp_path, record, platform="plan9")

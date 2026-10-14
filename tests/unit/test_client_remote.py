@@ -2,9 +2,7 @@
 
 import os
 import stat
-import subprocess
 import wave
-from argparse import Namespace
 from types import SimpleNamespace
 
 import numpy as np
@@ -12,7 +10,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from speakcheck import cli
-from speakcheck.client import backend as backend_mod
 from speakcheck.client import credentials
 from speakcheck.client import remote as remote_mod
 from speakcheck.client.backend import LocalBackend, RemoteBackend, make_backend
@@ -236,6 +233,14 @@ class TestHelpers:
         path = tmp_path / "a.wav"
         audio.write_wav(path, np.zeros(1600, dtype=np.float32))
         assert len(read_pcm(path)) == 3200
+        other = tmp_path / "24k.wav"
+        with wave.open(str(other), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(24000)
+            w.writeframes(np.zeros(2400, dtype="<i2").tobytes())
+        assert read_pcm(other) == b""  # not streamable as is
+        assert len(remote_mod.pcm_16k(other)) == 3200  # converted to 16 kHz instead
         (tmp_path / "b.wav").write_bytes(b"junk")
         assert read_pcm(tmp_path / "b.wav") == b"" and read_pcm(tmp_path / "missing.wav") == b""
 
@@ -246,7 +251,7 @@ class TestHelpers:
 
 
 class TestClientSetup:
-    def test_client_role(self, install_root, remote, tmp_path, monkeypatch):
+    def test_client_role(self, install_root, remote, tmp_path, monkeypatch):  # noqa: F811  (fixture)
         runner = Recorder()
         code = remote.invite()
         args = setup_args(tmp_path, role="client", server_url=URL, invite=code, device_name="pc",
@@ -262,7 +267,7 @@ class TestClientSetup:
         assert settings == {"mode": "remote", "url": URL, "headers": {"X-Org": "acme"}, "device_name": "pc"}
         assert credentials.load(data_dir, URL).account == "alice"
 
-    def test_client_role_needs_an_invite(self, install_root, remote, tmp_path):
+    def test_client_role_needs_an_invite(self, install_root, remote, tmp_path):  # noqa: F811  (fixture)
         args = setup_args(tmp_path, role="client", server_url=URL)
         setup = wizard.Setup(args, wizard.Console(interactive=False, out=lambda *a: None), runner=Recorder(),
                              detect=lambda root: None)  # fmt: skip

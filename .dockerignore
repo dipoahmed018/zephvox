@@ -1,0 +1,9 @@
+.git
+.venv
+**/__pycache__
+web/node_modules
+tests
+config.toml
+.env
+.install.json
+test-results.txt

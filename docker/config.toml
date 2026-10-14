@@ -1,0 +1,12 @@
+# The server's settings inside the Docker image. Change them by mounting your own file over
+# /app/config.toml (see config.example.toml for every option).
+
+[engine]
+data_dir = "/data"
+
+[server]
+host = "0.0.0.0"   # inside the container; compose.yml decides what the host exposes
+
+[provider.openai-compat]
+base_url = "http://ollama:11434/v1"   # the ollama service in compose.yml
+autostart = false                     # Ollama runs in its own container

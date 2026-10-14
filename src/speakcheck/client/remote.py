@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import struct
 import threading
 import time
 import uuid
@@ -263,6 +264,8 @@ class PracticeStream:
             if target is None:
                 raise ServerError("no practice attempt in progress")
             pcm = read_pcm(path)
+            if not pcm:  # not 16 kHz mono 16-bit: convert, and send it all from the start
+                pcm, self._broken = pcm_16k(path), True
             for attempt in range(2):
                 try:
                     if self._broken or attempt:
@@ -301,18 +304,36 @@ class PracticeStream:
 
 
 def read_pcm(path: Path) -> bytes:
-    """The 16-bit samples of a WAV file that may still be being written (sizes not final yet)."""
+    """The 16 kHz mono 16-bit samples of a WAV file that may still be being written (sizes not final
+    yet). Anything else (another rate, stereo, float) gives b"": `pcm_16k` converts it instead."""
     try:
         data = Path(path).read_bytes()
     except OSError:
         return b""
     if not data.startswith(b"RIFF"):
         return b""
+    fmt = data.find(b"fmt ", 12, 4096)
     at = data.find(b"data", 12, 4096)
-    if at < 0:
+    if fmt < 0 or at < 0:
+        return b""
+    channels, rate = struct.unpack_from("<HI", data, fmt + 10)
+    bits = struct.unpack_from("<H", data, fmt + 22)[0]
+    if (channels, rate, bits) != (1, 16000, 16):
         return b""
     pcm = data[at + 8 :]
     return pcm[: len(pcm) // 2 * 2]
+
+
+def pcm_16k(path: Path) -> bytes:
+    """A finished recording as 16 kHz mono 16-bit PCM, whatever its format."""
+    if pcm := read_pcm(path):
+        return pcm
+    import numpy as np
+
+    from ..engine import audio
+
+    samples = audio.decode(path)
+    return (np.clip(samples, -1.0, 1.0) * 32767).astype("<i2").tobytes()
 
 
 def _detail(response: httpx.Response) -> str:

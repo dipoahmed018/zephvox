@@ -315,6 +315,52 @@ Webhooks are signed: `Speakcheck-Signature: t=<unix>,v1=<HMAC-SHA256(webhook sec
 retried after 1, 5 and 30 minutes. Full API docs are served at `/v1/docs`. Settings and default
 limits are under `[server]` in `config.example.toml`.
 
+### Running a server
+
+**With the installer**: choose "server only" in setup (or `speakcheck setup --role server`). It
+installs the engine and models, offers to create the first account, and can install a background
+service that starts with the computer: a systemd user unit on Linux, a LaunchAgent on macOS, or a
+scheduled task on Windows. Do it later with `speakcheck server install-service`; undo it with
+`speakcheck server remove-service`.
+
+**With Docker** (`docker/`): the speakcheck server plus Ollama.
+
+```sh
+docker compose -f docker/compose.yml up -d                       # CPU
+SPEAKCHECK_ACCELERATOR=cuda docker compose -f docker/compose.yml -f docker/compose.cuda.yml up -d
+SPEAKCHECK_ACCELERATOR=rocm docker compose -f docker/compose.yml -f docker/compose.rocm.yml up -d
+docker compose -f docker/compose.yml exec ollama ollama pull qwen3:8b
+docker compose -f docker/compose.yml exec speakcheck speakcheck server accounts add me
+```
+
+Models download into a volume on first use. Settings are in `docker/config.toml`; mount your own over
+`/app/config.toml` to change them.
+
+**HTTPS**: the server speaks plain HTTP, and keys and recordings must not cross a network
+unencrypted. Clients warn about `http://` addresses that aren't on the same machine. Put a reverse
+proxy in front; Caddy gets a certificate by itself and passes WebSockets through:
+
+```
+# Caddyfile
+speak.example.com {
+    reverse_proxy 127.0.0.1:8770
+}
+```
+
+With nginx, pass the WebSocket upgrade for practice and allow large uploads:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8770;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    client_max_body_size 200m;
+    proxy_read_timeout 600s;
+}
+```
+
 ## Tests
 
 ```sh

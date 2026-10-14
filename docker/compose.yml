@@ -1,0 +1,37 @@
+# speakcheck server + Ollama. From the repository root:
+#
+#   docker compose -f docker/compose.yml up -d                              # CPU
+#   SPEAKCHECK_ACCELERATOR=cuda docker compose -f docker/compose.yml -f docker/compose.cuda.yml up -d
+#   SPEAKCHECK_ACCELERATOR=rocm docker compose -f docker/compose.yml -f docker/compose.rocm.yml up -d
+#
+# Then: docker compose -f docker/compose.yml exec ollama ollama pull qwen3:8b
+#       docker compose -f docker/compose.yml exec speakcheck speakcheck server accounts add me
+services:
+  speakcheck:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        ACCELERATOR: ${SPEAKCHECK_ACCELERATOR:-cpu}
+    image: speakcheck-server:${SPEAKCHECK_ACCELERATOR:-cpu}
+    ports:
+      # Only this machine can connect: put HTTPS (Caddy, nginx) in front, or use "8770:8770"
+      # on a private network.
+      - "127.0.0.1:8770:8770"
+    volumes:
+      - speakcheck-data:/data      # accounts, jobs, synced history
+      - speakcheck-models:/models  # downloaded speech models
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    volumes:
+      - ollama:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  speakcheck-data:
+  speakcheck-models:
+  ollama:

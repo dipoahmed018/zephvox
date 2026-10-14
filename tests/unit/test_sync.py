@@ -15,7 +15,7 @@ from speakcheck.web.daemon import Daemon
 from tests.unit.test_client_remote import URL, remote  # noqa: F401  (fixture)
 
 
-def device(name, remote, engine, tmp_path):
+def device(name, remote, engine, tmp_path):  # noqa: F811  (fixture)
     """A second computer on alice's account: its own data folder and key."""
     data = tmp_path / name
     config = Config(engine=EngineSettings(data_dir=data), providers=dict(engine.config.providers),

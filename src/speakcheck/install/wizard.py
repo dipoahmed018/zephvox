@@ -428,6 +428,18 @@ class Setup:
         finally:
             db.close()
 
+    def offer_service(self, command: str) -> None:
+        from ..server import os_service
+
+        if self.args.dry_run or not self.console.confirm("Run the server in the background, started with the computer?"):
+            self.console.say(f"Start it yourself with:  {command} server serve   (or later: {command} server install-service)")
+            return
+        cmd = os_service.command(self.python, self.config_path if self.config_path.exists() else None, None, None)
+        try:
+            self.console.say(f"  Installed: {os_service.install(cmd, self.root, self.run)}")
+        except (OSError, subprocess.CalledProcessError) as e:
+            self.console.say(f"  ! Couldn't install the service ({e}); run `{command} server serve` instead.")
+
     def run_all(self) -> int:
         say = self.console.say
         say("speakcheck setup")
@@ -476,6 +488,7 @@ class Setup:
         say("\nDone." if ok else "\nInstalled, with problems (see above).")
         if role == "server":
             self.first_account(command)
+            self.offer_service(command)
             say(f"Run the server with:  {command} server serve --host 0.0.0.0   (put HTTPS in front of it)")
             say(f"Use speakcheck on this computer too, later:  {command} setup --role full")
             return 0 if ok else 1
