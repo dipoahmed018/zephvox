@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>zephvox: say it, see what to fix</title>
+  <meta name="description" content="zephvox listens while you speak English and shows the sounds and sentences to work on. A small app on your computer records; a zephvox server does the analysis.">
+  <meta name="theme-color" content="#f2f7fb">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="zephvox: say it, see what to fix">
+  <meta property="og:description" content="Record yourself speaking English and get the sounds and sentences to work on, then practice them until they pass.">
+  <meta property="og:image" content="https://dipoahmed018.github.io/zephvox/assets/og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preload" href="assets/fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/site.css">
+  <script>
+    // Apply the saved theme before the first paint (no flash), and mark that scripts run.
+    document.documentElement.classList.add("js");
+    try {
+      var t = localStorage.getItem("zephvox.site.theme");
+      if (t === "dark" || t === "light") document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+</head>
+<body>
+  <a class="skip" href="#install">Skip to the install steps</a>
+
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></symbol>
+      <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+      <symbol id="i-lines" viewBox="0 0 24 24"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></symbol>
+      <symbol id="i-text" viewBox="0 0 24 24"><path d="m6 16 6-12 6 12M8 12h8"/><path d="m16 20 2 2 4-4"/></symbol>
+      <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+      <symbol id="i-wind" viewBox="0 0 24 24"><path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/><path d="M9.6 4.6A2 2 0 1 1 11 8H2"/><path d="M12.6 19.4A2 2 0 1 0 14 16H2"/></symbol>
+      <symbol id="i-trend" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+      <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+      <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    </defs>
+  </svg>
+
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="#top"><img src="assets/logo.svg" alt="" width="30" height="30">zephvox</a>
+      <nav class="nav" aria-label="Sections">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#faq">FAQ</a>
+        <a class="keep" href="#install">Install</a>
+      </nav>
+      <div class="header-actions">
+        <a class="icon-btn" href="https://github.com/dipoahmed018/zephvox" aria-label="Source code on GitHub"><svg class="icon"><use href="#i-github"/></svg></a>
+        <button class="icon-btn" id="theme" type="button" aria-label="Switch between light and dark"><svg class="icon sun"><use href="#i-sun"/></svg><svg class="icon moon"><use href="#i-moon"/></svg></button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <canvas id="wind" aria-hidden="true"></canvas>
+      <div class="wrap">
+        <div class="hero-copy">
+          <p class="eyebrow">The zephvox client</p>
+          <h1 style="margin-top:14px">Say it. <em>See what to fix.</em></h1>
+          <p class="lede">zephvox listens while you speak English and shows the sounds and sentences to work on, then lets you practice them until they pass. The small app on your computer records; a zephvox server does the analysis.</p>
+          <div class="cta">
+            <a class="btn primary" href="#install">Install the client</a>
+            <a class="btn" href="#how">How it works</a>
+          </div>
+          <p class="fine">Free and open source · Linux, macOS and Windows · about 80&nbsp;MB</p>
+          <button class="btn wind-toggle" id="wind-toggle" type="button" aria-pressed="false">Make the wind hear a voice</button>
+        </div>
+
+        <div class="window">
+          <img id="shot" src="assets/screenshots/report-light.png" width="1280" height="800" alt="A zephvox report: the transcript with mispronounced words underlined, and for each one the expected sounds against the ones you made.">
+        </div>
+      </div>
+    </div>
+
+    <section id="how">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">How it works</p>
+          <h2>Talk. Get a report. Practice.</h2>
+        </div>
+        <ol class="steps">
+          <li>
+            <h3>Record from anywhere</h3>
+            <p>Press <span class="kbd">Ctrl</span> <span class="kbd">Shift</span> <span class="kbd">Alt</span> <span class="kbd">R</span> in any app, talk for a minute or two, and press it again. You don't need the page open.</p>
+          </li>
+          <li>
+            <h3>Your server analyzes it</h3>
+            <p>The client sends the recording to the zephvox server you connected it to. It transcribes, compares your sounds with the dictionary and checks the grammar, then sends the report back.</p>
+          </li>
+          <li>
+            <h3>Read it, then practice</h3>
+            <p>See each mistake in its sentence, hear it said correctly, and practice the word until it scores as a pass. Your history stays on your computer.</p>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section id="sounds" style="padding-top:0">
+      <div class="wrap demo">
+        <div class="card" role="img" aria-label="Example: thorough should start with the th sound, but it was heard as t.">
+          <div><span class="word">thorough</span><span class="ipa">/θ ʌ ɹ oʊ/</span></div>
+          <div class="tiles-row">
+            <span class="eyebrow">Expected</span>
+            <span class="tiles"><span class="tile good">θ</span><span class="tile">ʌ</span><span class="tile">ɹ</span><span class="tile">oʊ</span></span>
+            <span class="eyebrow">You said</span>
+            <span class="tiles"><span class="tile bad">t</span><span class="tile">ʌ</span><span class="tile">ɹ</span><span class="tile">oʊ</span></span>
+          </div>
+          <p class="tip">Put the tip of your tongue lightly between your teeth and let the air flow out, with no stop.</p>
+        </div>
+        <div class="demo-copy">
+          <p class="eyebrow">Sounds, not just words</p>
+          <h2>See exactly which sound slipped.</h2>
+          <p>Speech apps often just say "try again". zephvox lines up the sounds a word should have against the ones you made, so you can see that the <b>th</b> came out as a <b>t</b>, and what to do with your tongue about it.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" style="padding-top:0">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">What you get</p>
+          <h2>Everything you need to keep improving.</h2>
+        </div>
+        <div class="features">
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-mic"/></svg></span><h3>One shortcut, anywhere</h3><p>Start and stop from any app. A desktop note tells you when your report is ready.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-lines"/></svg></span><h3>Expected against heard sounds</h3><p>A dropped or swapped sound shows as a gap or a colored tile, not a vague score.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-text"/></svg></span><h3>Grammar, with the fix</h3><p>The sentence you said, the corrected one and a short reason. Mark a false alarm and it's ignored from then on.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-target"/></svg></span><h3>Practice that scores you</h3><p>Say a word and get a 0–100 score a moment later. It stops listening when you stop talking.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-wind"/></svg></span><h3>A page that shows what's happening</h3><p>Wind that follows your voice while you record and carries your words through each step.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-trend"/></svg></span><h3>Progress over time</h3><p>Your weakest words and the sounds you mix up most, across every recording.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-cloud"/></svg></span><h3>Works when the server doesn't</h3><p>If the server can't be reached, recordings wait on your computer and are analyzed when it's back.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-lock"/></svg></span><h3>Light, dark, and private</h3><p>Your history stays on your computer, and the page works in light and dark.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="install" style="background:color-mix(in srgb, var(--sky) 5%, var(--bg))">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Install the client</p>
+          <h2>Three steps, about a minute.</h2>
+        </div>
+        <div class="install-grid">
+          <ol class="install-steps">
+            <li>
+              <h3>Get an invite</h3>
+              <p>Ask whoever runs your zephvox server for its address and an invite code. The code is used once, for this one device.</p>
+            </li>
+            <li>
+              <h3>Run one command</h3>
+              <p>Put in your server's address and your code.</p>
+              <div>
+                <div class="tabs" role="tablist" aria-label="Your system">
+                  <button class="tab" role="tab" id="tab-unix" aria-controls="panel-unix" aria-selected="true" type="button">macOS · Linux</button>
+                  <button class="tab" role="tab" id="tab-win" aria-controls="panel-win" aria-selected="false" type="button">Windows</button>
+                </div>
+                <div class="panel" id="panel-unix" role="tabpanel" aria-labelledby="tab-unix">
+                  <div class="code">
+                    <pre><code id="cmd-unix">curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.sh | sh -s -- \
+  --server-url https://speak.example.com --invite inv_...</code></pre>
+                    <button class="copy" type="button" data-copy="cmd-unix"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
+                  </div>
+                </div>
+                <div class="panel" id="panel-win" role="tabpanel" aria-labelledby="tab-win">
+                  <div class="code">
+                    <pre><code id="cmd-win">$env:ZEPHVOX_SETUP_ARGS = "--server-url https://speak.example.com --invite inv_..."
+irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex</code></pre>
+                    <button class="copy" type="button" data-copy="cmd-win"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
+                  </div>
+                </div>
+              </div>
+            </li>
+            <li>
+              <h3>Press the shortcut</h3>
+              <p>Start zephvox from your app menu, then press <span class="kbd">Ctrl</span> <span class="kbd">Shift</span> <span class="kbd">Alt</span> <span class="kbd">R</span> and talk. You can change the keys in <b>Settings</b>.</p>
+            </li>
+          </ol>
+
+          <aside>
+            <ul class="reqs" aria-label="What you need">
+              <li><svg class="icon"><use href="#i-check"/></svg><span><b>A computer</b> running Linux, macOS or Windows. About 80&nbsp;MB of disk.</span></li>
+              <li><svg class="icon"><use href="#i-check"/></svg><span><b>A microphone</b>, and a connection to your server.</span></li>
+              <li><svg class="icon"><use href="#i-check"/></svg><span><b>Nothing else.</b> The installer brings its own Python through <a href="https://docs.astral.sh/uv/">uv</a>. No GPU, no models, no PyTorch.</span></li>
+            </ul>
+            <p class="note">No server yet? The <b>full app</b> runs everything on your own computer, and can share it with your other devices. See <a href="https://github.com/dipoahmed018/zephvox#-install">the repository</a>.</p>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Privacy</p>
+          <h2>Your voice goes where you send it, and nowhere else.</h2>
+        </div>
+        <div class="privacy">
+          <div class="card"><h3>Only to your server</h3><p>Recordings are sent to the one server you connected, and nowhere else. The page warns you if its address isn't encrypted.</p></div>
+          <div class="card"><h3>Your history stays here</h3><p>Recordings, reports and practice scores are kept on your computer. Backing them up to the server is a switch in Settings.</p></div>
+          <div class="card"><h3>A key for each device</h3><p>Your device's key is kept in a file only you can read. The server's admin can disconnect it, and you can replace it in Settings.</p></div>
+          <div class="card"><h3>Open source</h3><p>zephvox is free software under the AGPL-3.0. You can read exactly what it does with your audio.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq" style="padding-top:0">
+      <div class="wrap">
+        <div class="section-head">
+          <p class="eyebrow">Questions</p>
+          <h2>Before you install.</h2>
+        </div>
+        <div class="faq">
+          <details><summary>Do I need a GPU or a fast computer?</summary><p>No. The client only records and shows reports; the server does the heavy work. Any computer with a microphone is fine.</p></details>
+          <details><summary>Where do I get an invite?</summary><p>From the person or organization that runs the zephvox server you're meant to use. They create your account and send you an invite code and the server's address.</p></details>
+          <details><summary>What if the server isn't reachable?</summary><p>You can keep recording. Recordings wait on your computer, marked "waiting for the server" in History, and are analyzed as soon as it's back.</p></details>
+          <details><summary>Can I run everything on my own computer instead?</summary><p>Yes. In <b>Settings → Where analysis runs</b>, choose <b>This computer</b>. zephvox offers to install the speech models, which are several GB, and then works offline.</p></details>
+          <details><summary>How do I change the shortcut keys?</summary><p><b>Settings → General → Shortcuts</b>: click <b>Change</b> and press the new keys. You can also bind <code>zephvox toggle</code> in your system's own keyboard settings.</p></details>
+          <details><summary>Which English does it check against?</summary><p>Standard American English by default, or British English if the server is set up for it. Some findings are accent rather than mistakes, and you can mark those as "not a mistake".</p></details>
+          <details><summary>How do I remove it?</summary><p>Run <code>zephvox uninstall</code>. It asks before deleting your recordings.</p></details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap">
+      <p>zephvox is free software under the <a href="https://github.com/dipoahmed018/zephvox/blob/main/LICENSE">AGPL-3.0</a>.</p>
+      <nav aria-label="Project">
+        <a href="https://github.com/dipoahmed018/zephvox">Source code</a>
+        <a href="https://github.com/dipoahmed018/zephvox/blob/main/LICENSING.md">Commercial licensing</a>
+        <a href="https://github.com/dipoahmed018/zephvox/blob/main/THIRD_PARTY_LICENSES.md">Third-party licenses</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="assets/site.js"></script>
+</body>
+</html>

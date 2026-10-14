@@ -45,6 +45,18 @@ Other models you configure yourself keep their own licenses.
 | pynput, python-xlib (Linux) | desktop | LGPL-3.0 / LGPL-2.1+ |
 | fastapi, uvicorn, python-multipart | web | MIT / BSD-3-Clause / Apache-2.0 |
 
+## Web page (bundled into the built page and the website)
+
+| Package | License |
+|---|---|
+| react, react-dom | MIT |
+| radix-ui | MIT |
+| Tailwind CSS, tw-animate-css, tailwind-merge, clsx, sonner | MIT |
+| class-variance-authority | Apache-2.0 |
+| lucide-react (icons) | ISC |
+| shadcn/ui components (copied into `web/src/components/ui`, then restyled) | MIT |
+| Fraunces, Nunito Sans, Noto Sans (fonts) | SIL Open Font License 1.1; the texts are in `docs/assets/fonts/` |
+
 ## System programs (optional)
 
 | Program | Used for | License |
