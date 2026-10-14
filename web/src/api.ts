@@ -34,9 +34,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 export const api = {
   status: () => request<Status>("GET", "/api/status"),
   settings: () => request<Settings>("GET", "/api/settings"),
-  saveSettings: (changes: Partial<Pick<Settings, "capture" | "analyzers">>) =>
+  saveSettings: (changes: Partial<Pick<Settings, "capture" | "tts" | "analyzers">>) =>
     request<Settings>("PUT", "/api/settings", changes),
   devices: () => request<{ provider: string; selected: string | null; devices: Device[] }>("GET", "/api/devices"),
+  voices: () =>
+    request<{ provider: string; selected: string | null; voices: { id: string; label: string }[] }>("GET", "/api/voices"),
 
   start: (mode: "analysis" | "practice", analyzers?: string[]) =>
     request<Recording>("POST", "/api/record/start", { mode, analyzers }),

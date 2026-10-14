@@ -481,3 +481,43 @@ class TestClientAndCLI:
 
 def test_availability_helper_type():
     assert Availability(True).ok
+
+
+class VoicedTTS(FakeTTS):
+    name = "voiced-tts"
+
+    class Settings(FakeTTS.Settings):
+        voice: str = "v1"
+
+    def capabilities(self):
+        return {"voice": self.settings.voice, "voices": [{"id": "v1", "label": "One"}, {"id": "v2", "label": "Two"}]}
+
+    def synthesize(self, text):
+        return f"RIFF{self.settings.voice}:{text}".encode()
+
+
+def test_voice_choice_changes_tts_audio(daemon, registry):
+    registry.register("tts", "voiced-tts", VoicedTTS)
+    daemon.engine.config.providers["tts"] = ["voiced-tts"]
+    daemon.engine.release("tts")
+    api = TestClient(create_app(daemon))
+    assert api.get("/api/voices").json() == {"provider": "voiced-tts", "selected": "v1",
+                                             "voices": [{"id": "v1", "label": "One"}, {"id": "v2", "label": "Two"}]}  # fmt: skip
+    assert api.get("/api/tts", params={"text": "hi"}).content == b"RIFFv1:hi"
+    assert api.put("/api/settings", json={"tts": {"provider": "voiced-tts", "voice": "v2"}}).json()["tts"]["voice"] == "v2"
+    assert api.get("/api/tts", params={"text": "hi"}).content == b"RIFFv2:hi"  # not the cached v1 audio
+    api.put("/api/settings", json={"tts": {"provider": "voiced-tts", "voice": None}})
+    assert api.get("/api/voices").json()["selected"] == "v1"  # cleared → driver default
+    daemon.engine.config.providers["tts"] = []
+    daemon.engine.release("tts")
+    assert api.get("/api/voices").status_code == 409
+
+
+def test_reanalyze_session_in_place(api, daemon, wav_file):
+    first = daemon.engine.analyze(wav_file, analyzers=["grammar"])
+    assert api.post(f"/api/sessions/{first.session_id}/analyze", json={"analyzers": ["pronunciation"]}).json() == {
+        "queued": True}  # fmt: skip
+    wait_for_jobs(daemon)
+    result = daemon.engine.sessions.load_result(daemon.engine.sessions.get(first.session_id))
+    assert result.analyzers == ["pronunciation"] and len(daemon.engine.sessions.list()) == 1
+    assert api.post("/api/sessions/nope/analyze", json={}).status_code == 404

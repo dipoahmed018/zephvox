@@ -20,6 +20,7 @@ from typing import Any
 
 from ..engine.config import ACTIONS, apply_user_settings, load_user_settings, save_user_settings
 from ..engine.engine import Engine, Recording
+from ..engine.session import Session
 from ..engine.errors import ProviderUnavailable, RecordingError, SpeakcheckError
 from ..engine.events import Event
 
@@ -150,7 +151,7 @@ class Daemon:
             self._submit("analysis", lambda: self._analyze(recording, analyzers))
         return recording
 
-    def _analyze(self, recording: Recording, analyzers: list[str] | None):
+    def _analyze(self, recording: Recording | Session, analyzers: list[str] | None):
         try:
             result = self.engine.analyze(recording, analyzers)
         finally:
@@ -185,6 +186,11 @@ class Daemon:
         except SpeakcheckError as e:
             self.publish("action_error", action=action, message=str(e))
 
+    def reanalyze(self, session_id: str, analyzers: list[str] | None) -> Future:
+        """Analyze an existing session again, in place (e.g. after tuning thresholds)."""
+        session = self.engine.sessions.get(session_id)
+        return self._submit("analysis", lambda: self._analyze(session, analyzers))
+
     def analyze_file(self, path: Path, analyzers: list[str] | None) -> Future:
         return self._submit("analysis", lambda: self._analyze_path(path, analyzers))
 
@@ -207,6 +213,7 @@ class Daemon:
         stored = load_user_settings(self.engine.config.engine.data_dir)
         return {
             "capture": stored.get("capture") or {},
+            "tts": stored.get("tts") or {},
             "analyzers": self.engine.config.engine.analyzers,
             "shortcuts": self.engine.config.shortcuts,
         }
@@ -214,11 +221,13 @@ class Daemon:
     def update_settings(self, changes: dict[str, Any]) -> dict[str, Any]:
         data_dir = self.engine.config.engine.data_dir
         stored = load_user_settings(data_dir)
-        stored.update({k: v for k, v in changes.items() if k in ("capture", "analyzers")})
+        stored.update({k: v for k, v in changes.items() if k in ("capture", "tts", "analyzers")})
         save_user_settings(data_dir, stored)
         self.engine.config = apply_user_settings(self.engine.config, stored)
         if "capture" in changes and not self.engine.is_recording():
             self.engine.release("capture")  # next recording uses the new device
+        if "tts" in changes:
+            self.engine.release("tts")
         self.publish("settings_changed", settings=self.settings())
         return self.settings()
 

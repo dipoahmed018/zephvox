@@ -64,6 +64,8 @@ class PhoneSeq:
     phones: list[str]
     start: float = 0.0
     end: float = 0.0
+    # When the recognizer knows them: when each phone was heard (absolute seconds).
+    times: list[float] | None = None
 
 
 @dataclass

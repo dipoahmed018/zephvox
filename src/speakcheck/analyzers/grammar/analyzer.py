@@ -22,6 +22,24 @@ def _locate(segment: Segment, phrase: str) -> tuple[int, int] | None:
     return None
 
 
+CONTRACTIONS = {
+    "it's": "it is", "that's": "that is", "there's": "there is", "what's": "what is", "he's": "he is",
+    "she's": "she is", "i'm": "i am", "you're": "you are", "we're": "we are", "they're": "they are",
+    "i've": "i have", "you've": "you have", "we've": "we have", "they've": "they have", "i'll": "i will",
+    "you'll": "you will", "we'll": "we will", "they'll": "they will", "i'd": "i would", "don't": "do not",
+    "doesn't": "does not", "didn't": "did not", "can't": "cannot", "won't": "will not", "isn't": "is not",
+    "aren't": "are not", "wasn't": "was not", "weren't": "were not", "let's": "let us",
+    "gonna": "going to", "wanna": "want to", "gotta": "got to", "kinda": "kind of",
+}  # fmt: skip
+
+
+def _letters(text: str) -> str:
+    """Words only: lowercase, no punctuation, contractions expanded — so that punctuation,
+    capitalization or contraction-only 'fixes' (never mistakes in speech) compare equal."""
+    words = re.sub(r"[^\w\s']", " ", text.replace("\u2019", "'").lower()).split()
+    return " ".join(CONTRACTIONS.get(w, w) for w in words)
+
+
 def _contains(sentence: str, phrase: str) -> bool:
     squash = lambda s: re.sub(r"\s+", " ", s.replace("’", "'")).strip().lower()  # noqa: E731
     return squash(phrase) in squash(sentence)
@@ -33,8 +51,9 @@ class GrammarAnalyzer(Analyzer):
     uses = ("llm",)
 
     class Settings(AnalyzerSettings):
-        batch_size: int = 10
-        min_confidence: float = 0.6
+        batch_size: int = 5
+        # High on purpose: in casual speech a missed nitpick is better than a false alarm.
+        min_confidence: float = 0.85
         retries: int = 1
 
     def analyze(self, ctx: AnalysisContext) -> list[Finding]:
@@ -86,7 +105,7 @@ class GrammarAnalyzer(Analyzer):
             valid = (
                 0 <= index < len(batch)
                 and original
-                and original.lower() != correction.lower()
+                and _letters(original) != _letters(correction)  # punctuation/contractions aren't mistakes
                 and _contains(batch[index].text, original)  # guards against invented quotes
             )
             if not valid:

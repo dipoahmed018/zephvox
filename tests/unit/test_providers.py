@@ -60,7 +60,7 @@ class TestOpenAICompat:
         request = route.calls.last.request
         body = json.loads(request.content)
         assert request.headers["Authorization"] == "Bearer secret"
-        assert body["model"] == "qwen3:8b" and body["temperature"] == 0.0
+        assert body["model"] == "qwen3:8b" and body["temperature"] == 0.0 and body["max_tokens"] == 2048
         assert body["messages"][1]["content"].endswith("/no_think")
         assert body["response_format"]["json_schema"]["schema"] == {"type": "object"}
 
@@ -83,6 +83,13 @@ class TestOpenAICompat:
         with pytest.raises(LLMError):
             self.llm().complete_json("s", "u", {})
         assert route.call_count == 1
+
+    @respx.mock
+    def test_truncated_reply_is_an_error(self):
+        respx.post(f"{BASE}/chat/completions").respond(
+            json={"choices": [{"message": {"content": '{"mistakes": ['}, "finish_reason": "length"}]})
+        with pytest.raises(LLMError, match="cut off"):
+            self.llm().complete_json("s", "u", {})
 
     @respx.mock
     def test_unexpected_shape(self):

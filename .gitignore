@@ -14,3 +14,6 @@ test-results.txt
 
 # Synthesized test audio (regenerate with scripts/make_fixtures.py)
 tests/fixtures/*.wav
+
+# TypeScript build cache
+web/*.tsbuildinfo

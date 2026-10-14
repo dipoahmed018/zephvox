@@ -41,6 +41,8 @@ class OpenAICompatLLM(LLMProvider):
         temperature: float = 0.0
         timeout: float = 300.0
         max_retries: int = 2
+        # Hard cap on reply length: with forced JSON some models never stop generating.
+        max_tokens: int = 2048
         # Qwen3's soft switch; harmless for other models. Grammar checking doesn't need reasoning traces.
         no_think: bool = True
         # Require `model` in the server's model list (turn off for servers that name models differently).
@@ -159,6 +161,7 @@ class OpenAICompatLLM(LLMProvider):
         body = {
             "model": self.settings.model,
             "temperature": self.settings.temperature,
+            "max_tokens": self.settings.max_tokens,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
             "response_format": {
                 "type": "json_schema",
@@ -171,7 +174,8 @@ class OpenAICompatLLM(LLMProvider):
                 try:
                     resp = client.post("/chat/completions", json=body)
                     resp.raise_for_status()
-                    content = resp.json()["choices"][0]["message"]["content"]
+                    choice = resp.json()["choices"][0]
+                    content = choice["message"]["content"]
                 except (httpx.TransportError, httpx.HTTPStatusError) as e:
                     last_error = e
                     if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
@@ -179,5 +183,7 @@ class OpenAICompatLLM(LLMProvider):
                     continue
                 except (KeyError, IndexError, ValueError) as e:
                     raise LLMError(f"Unexpected response shape from {self.settings.base_url}: {e}") from e
+                if choice.get("finish_reason") == "length":
+                    raise LLMError(f"Reply was cut off at max_tokens={self.settings.max_tokens}")
                 return parse_json_reply(content or "")
         raise LLMError(f"LLM request to {self.settings.base_url} failed: {last_error}")

@@ -70,7 +70,7 @@ def _default_providers() -> dict[str, list[str]]:
         "g2p": ["chain"],
         "phonemes": ["wav2vec2"],
         "llm": ["openai-compat"],
-        "tts": ["espeak-ng"],
+        "tts": ["kokoro", "espeak-ng"],
         "triggers": ["portal", "pynput"] if linux else ["pynput"],
     }
 
@@ -163,13 +163,18 @@ def save_user_settings(data_dir: Path, settings: dict[str, Any]) -> None:
 
 
 def apply_user_settings(config: Config, settings: dict[str, Any]) -> Config:
-    """Supported keys: `capture: {provider, device}`, `analyzers: [...]`."""
+    """Supported keys: `capture: {provider, device}`, `tts: {provider, voice}`, `analyzers: [...]`."""
     update: dict[str, Any] = {}
-    capture = settings.get("capture") or {}
-    if capture.get("provider"):
-        provider = {k: dict(v) for k, v in config.provider.items()}
-        provider.setdefault(capture["provider"], {})["device"] = capture.get("device")
-        update["provider"] = provider
+    provider = {k: dict(v) for k, v in config.provider.items()}
+    for key, field in (("capture", "device"), ("tts", "voice")):
+        chosen = settings.get(key) or {}
+        if chosen.get("provider"):
+            settings_for = provider.setdefault(chosen["provider"], {})
+            if chosen.get(field) is None:
+                settings_for.pop(field, None)  # back to the driver's default
+            else:
+                settings_for[field] = chosen[field]
+            update["provider"] = provider
     if settings.get("analyzers"):
         update["engine"] = config.engine.model_copy(update={"analyzers": list(settings["analyzers"])})
     return config.model_copy(update=update) if update else config

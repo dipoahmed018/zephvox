@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import { AnalyzerToggles } from "../components/AnalyzerToggles";
 import { MicSelect } from "../components/MicSelect";
+import { VoiceSelect } from "../components/VoiceSelect";
 import { useAction, useEngine } from "../engine";
 import type { Status as StatusData } from "../types";
 
@@ -18,7 +19,7 @@ const KIND_LABELS: Record<string, string> = {
   g2p: "Expected sounds",
   phonemes: "Heard sounds",
   llm: "Grammar model",
-  tts: "Voice",
+  tts: "Reference voice",
   triggers: "Shortcuts",
 };
 
@@ -56,6 +57,10 @@ export function Status() {
               <dt>Microphone</dt>
               <dd>
                 <MicSelect />
+              </dd>
+              <dt>Reference voice</dt>
+              <dd>
+                <VoiceSelect />
               </dd>
               <dt>Check for</dt>
               <dd>

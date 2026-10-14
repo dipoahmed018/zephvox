@@ -115,6 +115,14 @@ class PhonemeRecognizer(Provider):
         """Return the canonical IPA phones heard in `samples`."""
         raise NotImplementedError
 
+    def recognize_timed(self, samples: np.ndarray, sample_rate: int) -> list[tuple[str, float]] | None:
+        """Optional: phones with the time (seconds into `samples`) each was heard.
+
+        Lets analyzers attribute sounds to words by time instead of by alignment alone.
+        Return None if the driver can't tell.
+        """
+        return None
+
 
 class LLMProvider(Provider):
     kind = "llm"

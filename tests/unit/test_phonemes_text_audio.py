@@ -116,3 +116,26 @@ def test_event_bus_filters_and_unsubscribes():
     assert [e.type for e in seen] == ["a", "b"]
     assert seen[0].data == {"x": 1}
     assert [e.type for e in only_b] == ["b"]
+
+
+class TestSplitOnSilence:
+    def test_short_audio_is_one_piece(self):
+        samples = np.ones(16000 * 5, dtype=np.float32)
+        (piece,) = audio.split_on_silence(samples)
+        assert piece[0] == 0.0 and len(piece[1]) == len(samples)
+
+    def test_cuts_at_the_quiet_gap(self):
+        loud = np.full(16000 * 20, 0.5, dtype=np.float32)
+        gap = np.zeros(16000 // 2, dtype=np.float32)
+        samples = np.concatenate([loud, gap, loud, gap, loud])  # 61 s with gaps at 20 s and 40.5 s
+        pieces = audio.split_on_silence(samples, max_seconds=28, min_seconds=10)
+        starts = [round(p[0], 1) for p in pieces]
+        assert len(pieces) == 3
+        assert 20.0 <= starts[1] <= 20.5 and 40.5 <= starts[2] <= 41.0
+        assert sum(len(p[1]) for p in pieces) == len(samples)  # nothing lost or duplicated
+        assert all(len(p[1]) <= 28 * 16000 for p in pieces)
+
+    def test_no_silence_still_respects_max_length(self):
+        samples = np.full(16000 * 70, 0.5, dtype=np.float32)
+        pieces = audio.split_on_silence(samples, max_seconds=28, min_seconds=10)
+        assert all(len(p[1]) <= 28 * 16000 for p in pieces) and sum(len(p[1]) for p in pieces) == len(samples)

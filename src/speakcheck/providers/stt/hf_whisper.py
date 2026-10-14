@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 
+from ...engine import audio
 from ...engine.models import Segment, Transcript, Word
 from .._torch import quiet_transformers, resolve_device
 from ..base import Availability, ProviderSettings, STTProvider
@@ -19,8 +20,9 @@ class HFWhisperSTT(STTProvider):
         model: str = "openai/whisper-large-v3-turbo"
         device: str = "auto"
         language: str = "en"
-        chunk_length_s: int = 30
-        batch_size: int = 8
+        # Whisper works on 30 s windows. Longer audio is split at quiet moments into pieces of at
+        # most this length; transformers' own long-form mode uses runaway memory with word timestamps.
+        max_piece_s: float = 28.0
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)
@@ -52,25 +54,24 @@ class HFWhisperSTT(STTProvider):
 
     def transcribe(self, samples: np.ndarray, sample_rate: int) -> Transcript:
         pipe = self._load()
-        kwargs = {}
-        if len(samples) > self.settings.chunk_length_s * sample_rate:
-            # Only long recordings need the pipeline's chunked mode.
-            kwargs = {"chunk_length_s": self.settings.chunk_length_s, "batch_size": self.settings.batch_size}
-        out = pipe(
-            {"raw": samples, "sampling_rate": sample_rate},
-            return_timestamps="word",
-            generate_kwargs={"language": self.settings.language, "task": "transcribe"},
-            **kwargs,
-        )
-        words = []
-        for chunk in out.get("chunks", []):
-            start, end = chunk["timestamp"]
-            if start is None:
-                continue
-            words.append(Word(chunk["text"].strip(), float(start), float(end if end is not None else start)))
-        text = out.get("text", "").strip()
+        words: list[Word] = []
+        texts: list[str] = []
+        for offset, piece in audio.split_on_silence(samples, self.settings.max_piece_s, sample_rate=sample_rate):
+            out = pipe(
+                {"raw": piece, "sampling_rate": sample_rate},
+                return_timestamps="word",
+                generate_kwargs={"language": self.settings.language, "task": "transcribe"},
+            )
+            texts.append(out.get("text", "").strip())
+            for chunk in out.get("chunks", []):
+                start, end = chunk["timestamp"]
+                if start is None:
+                    continue
+                end = end if end is not None else start
+                words.append(Word(chunk["text"].strip(), offset + float(start), offset + float(end)))
         if not words:
             return Transcript([], provider=self.name)
+        text = " ".join(t for t in texts if t)
         segment = Segment(text=text, start=words[0].start, end=words[-1].end, words=words)
         return Transcript([segment], language=self.settings.language, provider=self.name, verbatim="none")
 

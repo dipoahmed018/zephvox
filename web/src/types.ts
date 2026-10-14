@@ -134,6 +134,7 @@ export interface Device {
 
 export interface Settings {
   capture: { provider?: string; device?: string | null };
+  tts: { provider?: string; voice?: string | null };
   analyzers: string[];
   shortcuts: Record<string, string>;
 }

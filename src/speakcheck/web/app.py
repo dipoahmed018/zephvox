@@ -41,6 +41,7 @@ class TargetBody(BaseModel):
 
 class SettingsBody(BaseModel):
     capture: dict[str, Any] | None = None
+    tts: dict[str, Any] | None = None
     analyzers: list[str] | None = None
 
 
@@ -101,6 +102,12 @@ def create_app(daemon: Daemon) -> FastAPI:
     @app.put("/api/settings")
     def put_settings(body: SettingsBody):
         return guard(daemon.update_settings, body.model_dump(exclude_none=True))
+
+    @app.get("/api/voices")
+    def voices():
+        provider = guard(engine.provider, "tts")
+        caps = provider.capabilities()
+        return {"provider": provider.name, "selected": caps.get("voice"), "voices": caps.get("voices", [])}
 
     @app.get("/api/devices")
     def devices():
@@ -180,6 +187,12 @@ def create_app(daemon: Daemon) -> FastAPI:
             samples = audio.slice_seconds(samples, start, end, pad=CLIP_PAD_S, sample_rate=SAMPLE_RATE)
         return Response(_wav_bytes(samples), media_type="audio/wav")
 
+    @app.post("/api/sessions/{sid}/analyze")
+    def session_reanalyze(sid: str, body: RecordBody):
+        session_or_404(sid)
+        daemon.reanalyze(sid, body.analyzers)
+        return {"queued": True}
+
     @app.post("/api/sessions/{sid}/findings/{index}/feedback")
     def finding_feedback(sid: str, index: int, body: FeedbackBody):
         session = session_or_404(sid)
@@ -212,7 +225,7 @@ def create_app(daemon: Daemon) -> FastAPI:
         return Response(path.read_bytes(), media_type="audio/wav")
 
     @lru_cache(maxsize=256)
-    def synthesize(text: str) -> bytes:
+    def synthesize(text: str, voice_key: str) -> bytes:  # voice_key: a new voice must not reuse old audio
         return engine.provider("tts").synthesize(text)
 
     @app.get("/api/tts")
@@ -220,7 +233,9 @@ def create_app(daemon: Daemon) -> FastAPI:
         if not text.strip() or len(text) > 300:
             raise HTTPException(400, "Text must be 1–300 characters")
         try:
-            return Response(synthesize(text.strip()), media_type="audio/wav")
+            provider = engine.provider("tts")
+            key = f"{provider.name}:{provider.settings.model_dump_json()}"
+            return Response(synthesize(text.strip(), key), media_type="audio/wav")
         except ProviderUnavailable as e:
             raise HTTPException(404, str(e)) from None
         except SpeakcheckError as e:

@@ -59,12 +59,14 @@ def test_hallucinated_and_malformed_suggestions_are_dropped():
         mistake(original="she were", correction="she was"),  # not in sentence
         mistake(index=5, original="am agree", correction="agree"),  # bad index
         mistake(original="agree", correction="agree"),  # no change
+        mistake(original="am agree", correction="Am agree,"),  # punctuation/capitals only
+        mistake(original="I am", correction="I'm"),  # contraction only
         {"index": "x"},  # malformed
         mistake(original="am agree", correction="agree", category="nonsense"),
     ]}  # fmt: skip
     findings, warnings, _ = _run(t, ScriptedLLM(reply))
     assert [(f.said, f.expected, f.category) for f in findings] == [("am agree", "agree", "other")]
-    assert "Ignored 4" in warnings[0]
+    assert "Ignored 6" in warnings[0]
 
 
 def test_low_confidence_is_filtered_silently():
@@ -110,6 +112,6 @@ def test_warns_when_stt_is_not_verbatim():
 
 def test_prompt_and_schema_shape():
     prompt = user_prompt(["Hello.", "He go."])
-    assert '"index": 1' in prompt and "He go." in prompt
+    assert prompt == "Sentences:\n0: Hello.\n1: He go."
     item = RESPONSE_SCHEMA["properties"]["mistakes"]["items"]
     assert set(item["required"]) == set(item["properties"])

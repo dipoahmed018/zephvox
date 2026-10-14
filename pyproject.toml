@@ -28,6 +28,8 @@ desktop = [
     "pynput>=1.7",
     "dbus-fast>=2.0; sys_platform == 'linux'",
 ]
+# Natural reference voices for practice.
+voice = ["kokoro>=0.9"]
 # Local daemon + web GUI (`speakcheck serve`).
 web = ["fastapi>=0.115", "uvicorn>=0.30", "python-multipart>=0.0.9"]
 
@@ -43,6 +45,7 @@ pipewire = "speakcheck.providers.capture.pipewire:PipeWireCapture"
 sounddevice = "speakcheck.providers.capture.sounddevice:SoundDeviceCapture"
 
 [project.entry-points."speakcheck.tts"]
+kokoro = "speakcheck.providers.tts.kokoro:KokoroTTS"
 espeak-ng = "speakcheck.providers.tts.espeak:EspeakTTS"
 
 [project.entry-points."speakcheck.triggers"]
@@ -111,4 +114,5 @@ omit = [
     "*/providers/stt/*",
     "*/providers/phonemes/*",
     "*/providers/g2p/espeak.py",
+    "*/providers/tts/kokoro.py",
 ]

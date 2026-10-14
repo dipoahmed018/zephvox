@@ -76,3 +76,24 @@ def tail_level(path: Path | str, seconds: float = 0.1, sample_rate: int = SAMPLE
         return None
     data = data[: len(data) - len(data) % 2]
     return level(np.frombuffer(data, dtype="<i2").astype(np.float32) / 32768)
+
+
+def split_on_silence(samples: np.ndarray, max_seconds: float = 28.0, min_seconds: float = 10.0,
+                     sample_rate: int = SAMPLE_RATE, hop_seconds: float = 0.1) -> list[tuple[float, np.ndarray]]:  # fmt: skip
+    """Cut long audio into pieces of at most `max_seconds`, each cut at the quietest moment
+    between `min_seconds` and `max_seconds` into the piece (so words aren't split).
+
+    Returns (start time in seconds, samples) pairs covering the whole input.
+    """
+    hop = max(1, int(hop_seconds * sample_rate))
+    max_len, min_len = int(max_seconds * sample_rate), int(min_seconds * sample_rate)
+    pieces, start = [], 0
+    while len(samples) - start > max_len:
+        lo, hi = start + min_len, start + max_len
+        frames = [samples[i : i + hop] for i in range(lo, hi - hop + 1, hop)]
+        energy = [float(np.mean(np.square(f, dtype=np.float64))) for f in frames]
+        cut = lo + int(np.argmin(energy)) * hop + hop // 2
+        pieces.append((start / sample_rate, samples[start:cut]))
+        start = cut
+    pieces.append((start / sample_rate, samples[start:]))
+    return pieces

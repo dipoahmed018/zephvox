@@ -27,7 +27,15 @@ def align(
     sub: Callable[[str, str], float] = substitution_cost,
     dele: Callable[[str], float] = deletion_cost,
     ins: Callable[[str], float] = insertion_cost,
+    penalty: Callable[[int, int], float] | None = None,
 ) -> tuple[float, list[AlignOp]]:
+    """`penalty(i, j)` adds a position-dependent cost to pairing ref[i] with hyp[j]
+    (e.g. to keep the pairing close in time)."""
+
+    def pair(i: int, j: int) -> float:
+        c = sub(ref[i], hyp[j])
+        return c + penalty(i, j) if penalty else c
+
     n, m = len(ref), len(hyp)
     dp = [[0.0] * (m + 1) for _ in range(n + 1)]
     for i in range(1, n + 1):
@@ -37,7 +45,7 @@ def align(
     for i in range(1, n + 1):
         for j in range(1, m + 1):
             dp[i][j] = min(
-                dp[i - 1][j - 1] + sub(ref[i - 1], hyp[j - 1]),
+                dp[i - 1][j - 1] + pair(i - 1, j - 1),
                 dp[i - 1][j] + dele(ref[i - 1]),
                 dp[i][j - 1] + ins(hyp[j - 1]),
             )
@@ -47,7 +55,7 @@ def align(
     while i > 0 or j > 0:
         # Prefer diagonal moves on ties so substitutions read naturally.
         if i > 0 and j > 0:
-            c = sub(ref[i - 1], hyp[j - 1])
+            c = pair(i - 1, j - 1)
             if abs(dp[i][j] - (dp[i - 1][j - 1] + c)) < 1e-9:
                 kind: OpType = "match" if ref[i - 1] == hyp[j - 1] else "sub"
                 ops.append(AlignOp(kind, ref[i - 1], hyp[j - 1], i - 1, j - 1, c))

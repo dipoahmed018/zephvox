@@ -111,8 +111,15 @@ def _heard_phonemes(store: ArtifactStore):
     heard = []
     for seg in store.get("transcript").segments:
         chunk = audio.slice_seconds(samples, seg.start, seg.end, pad=SEGMENT_PAD_S)
-        phones = recognizer.recognize(chunk, SAMPLE_RATE) if len(chunk) else []
-        heard.append(PhoneSeq(phones=phones, start=seg.start, end=seg.end))
+        if not len(chunk):
+            heard.append(PhoneSeq(phones=[], start=seg.start, end=seg.end))
+            continue
+        timed = recognizer.recognize_timed(chunk, SAMPLE_RATE)
+        if timed is None:
+            heard.append(PhoneSeq(recognizer.recognize(chunk, SAMPLE_RATE), seg.start, seg.end))
+        else:
+            offset = max(0.0, seg.start - SEGMENT_PAD_S)
+            heard.append(PhoneSeq([p for p, _ in timed], seg.start, seg.end, [round(offset + t, 3) for _, t in timed]))
     return heard
 
 

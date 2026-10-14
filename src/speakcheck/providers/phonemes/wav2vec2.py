@@ -7,7 +7,7 @@ from typing import Any
 
 import numpy as np
 
-from ...engine.phonemes import ENGLISH_PHONES, normalize, normalize_phone
+from ...engine.phonemes import ENGLISH_PHONES, normalize_phone
 from .._torch import quiet_transformers, resolve_device
 from ..base import Availability, PhonemeRecognizer, ProviderSettings
 
@@ -58,6 +58,9 @@ class Wav2Vec2PhonemeRecognizer(PhonemeRecognizer):
         return self._parts
 
     def recognize(self, samples: np.ndarray, sample_rate: int) -> list[str]:
+        return [p for p, _ in self.recognize_timed(samples, sample_rate)]
+
+    def recognize_timed(self, samples: np.ndarray, sample_rate: int) -> list[tuple[str, float]]:
         import torch
 
         tokenizer, extractor, model, device, allowed = self._load()
@@ -66,8 +69,24 @@ class Wav2Vec2PhonemeRecognizer(PhonemeRecognizer):
             logits = model(inputs.input_values.to(device)).logits
             if allowed is not None:
                 logits[..., : len(allowed)][..., ~allowed] = float("-inf")
-        ids = torch.argmax(logits, dim=-1)[0].cpu()
-        return normalize(tokenizer.decode(ids).split())
+        ids = torch.argmax(logits, dim=-1)[0].cpu().tolist()
+        return ctc_phones(ids, tokenizer.convert_ids_to_tokens(ids), tokenizer.pad_token_id,
+                          len(samples) / sample_rate)  # fmt: skip
 
     def close(self) -> None:
         self._parts = None
+
+
+def ctc_phones(ids: list[int], tokens: list[str], blank_id: int, duration: float) -> list[tuple[str, float]]:
+    """Greedy CTC decode keeping time: collapse repeats, drop blanks; time = frame centre in seconds."""
+    if not ids:
+        return []
+    frame = duration / len(ids)
+    out, prev = [], None
+    for i, (token_id, token) in enumerate(zip(ids, tokens, strict=True)):
+        if token_id != prev and token_id != blank_id:
+            phone = normalize_phone(token)
+            if phone and phone != "|" and not (phone.startswith("<") and phone.endswith(">")):
+                out.append((phone, round((i + 0.5) * frame, 3)))
+        prev = token_id
+    return out
