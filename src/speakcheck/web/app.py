@@ -258,21 +258,28 @@ def create_app(daemon: Daemon) -> FastAPI:
 
         out = []
         recording = engine.recording_status()
-        busy = {daemon.analyzing, recording and recording.get("session_id")}
+        recording_id = recording and recording.get("session_id")
         for session in reversed(engine.sessions.list()):
             result = engine.sessions.load_result(session)
             if result is None:
-                if session.id in busy or not session.audio_path.exists():
+                if session.id == recording_id or not session.audio_path.exists():
                     continue
                 try:
                     created = datetime.strptime(session.id[:15], "%Y%m%d-%H%M%S").isoformat()
                 except ValueError:
                     created = session.id
-                if pending(session) is not None:  # recorded while the server was unreachable
+                seconds = _wav_seconds(session.audio_path)
+                if session.id == daemon.analyzing:  # being analyzed right now
+                    out.append({"id": session.id, "created": created, "duration": seconds, "counts": {},
+                                "preview": "Analyzing…", "analyzing": True})  # fmt: skip
+                elif session.id in daemon.waiting:  # recorded, waiting for its turn
+                    out.append({"id": session.id, "created": created, "duration": seconds, "counts": {},
+                                "preview": "Waiting for its turn…", "queued": True})  # fmt: skip
+                elif pending(session) is not None:  # recorded while the server was unreachable
                     out.append({"id": session.id, "created": created, "duration": None, "counts": {},
                                 "preview": "Waiting for the server…", "pending": True})  # fmt: skip
                 else:  # the analysis failed (e.g. a model was missing): the recording is kept
-                    out.append({"id": session.id, "created": created, "duration": _wav_seconds(session.audio_path),
+                    out.append({"id": session.id, "created": created, "duration": seconds,
                                 "counts": {}, "preview": "", "unanalyzed": True})  # fmt: skip
                 continue
             feedback = engine.sessions.load_feedback(session)

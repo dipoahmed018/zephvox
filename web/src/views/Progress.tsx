@@ -71,11 +71,11 @@ export function Progress() {
           ) : (
             <ul className="surface m-0 list-none divide-y divide-border p-0">
               {(allWords ? weak : weak.slice(0, 6)).map((w) => (
-                <li key={w.target}>
+                <li key={w.target} className="first:rounded-t-[var(--radius-card)] last:rounded-b-[var(--radius-card)]">
                   <button
                     type="button"
                     onClick={() => navigate("practice", undefined, { w: w.target })}
-                    className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors first:rounded-t-[var(--radius-card)] last:rounded-b-[var(--radius-card)] hover:bg-accent"
+                    className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors rounded-[inherit] hover:bg-accent"
                   >
                     <span className="min-w-0 flex-1 truncate font-display text-lg">{w.target}</span>
                     <span className="text-sm text-muted-foreground">

@@ -122,6 +122,7 @@ class Daemon:
             threading.Thread(target=self._start_sharing_quietly, name="sharing-start", daemon=True).start()
         self._shortcut_pending: set[str] = set()  # "analysis" / "practice": announce the result
         self.analyzing: str | None = None  # session being analyzed right now
+        self.waiting: list[str] = []  # sessions queued behind it, oldest first
         self._backend: Any = None  # LocalBackend | RemoteBackend, built on first use
         self._backend_lock = threading.Lock()
         self._sync: Any = None  # SyncWorker while a server is connected
@@ -247,6 +248,7 @@ class Daemon:
             self._submit("practice", lambda: self._practice(meta["text"], recording, meta.get("session_id")))
         else:
             analyzers = self.analyzers_for_next
+            self._enqueue(recording.session_id)
             self._submit("analysis", lambda: self._analyze(recording, analyzers))
         return recording
 
@@ -264,7 +266,12 @@ class Daemon:
     def _analyze(self, recording: Recording | Session | Path, analyzers: list[str] | None):
         from ..client.remote import QueuedOffline
 
-        self.analyzing = getattr(recording, "session_id", None) or getattr(recording, "id", None)
+        sid = getattr(recording, "session_id", None) or getattr(recording, "id", None)
+        with self._jobs_lock:
+            if sid in self.waiting:
+                self.waiting.remove(sid)
+            self.analyzing = sid
+        self.publish("sessions_changed")  # it moves from "waiting" to "analyzing" in the lists
         try:
             result = self.backend.analyze(recording, analyzers)
         except QueuedOffline as e:
@@ -284,6 +291,12 @@ class Daemon:
         self._announce_analysis(result)
         self.sync_soon()
         return result
+
+    def _enqueue(self, session_id: str | None) -> None:
+        if session_id:
+            with self._jobs_lock:
+                if session_id not in self.waiting and session_id != self.analyzing:
+                    self.waiting.append(session_id)
 
     def cancel(self) -> Recording:
         recording = self.engine.cancel_recording()
@@ -356,6 +369,7 @@ class Daemon:
     def reanalyze(self, session_id: str, analyzers: list[str] | None) -> Future:
         """Analyze an existing session again, in place (e.g. after tuning thresholds)."""
         session = self.engine.sessions.get(session_id)
+        self._enqueue(session.id)
         return self._submit("analysis", lambda: self._analyze(session, analyzers))
 
     def analyze_file(self, path: Path, analyzers: list[str] | None) -> Future:

@@ -871,8 +871,16 @@ def test_recording_while_an_analysis_runs_queues_the_next_one(daemon, api, wav_f
     assert api.post("/api/record/stop").status_code == 200  # → analysis 2 queued behind the first
     events = [(t, d.get("pending")) for t, d in daemon.published if t.startswith("job_")]
     assert events == [("job_queued", 1), ("job_started", None), ("job_queued", 2)]
+    # The lists show both: the one being analyzed, and the one waiting for its turn.
+    listed = api.get("/api/sessions").json()
+    assert [("analyzing" if s.get("analyzing") else "queued" if s.get("queued") else "other") for s in listed] == [
+        "queued", "analyzing"]  # newest first; neither is reported as "not analyzed"  # fmt: skip
+    assert not any(s.get("unanalyzed") for s in listed)
     gate.set()
     wait_for_jobs(daemon)
+    after = api.get("/api/sessions").json()
+    assert len(after) == 2 and not any(s.get("analyzing") or s.get("queued") or s.get("unanalyzed") for s in after)
+    assert daemon.waiting == [] and daemon.analyzing is None
     assert [(t, d.get("pending")) for t, d in daemon.published if t.startswith("job_")][3:] == [
         ("job_finished", 1), ("job_started", None), ("job_finished", 0)]  # fmt: skip
     assert len([t for t, _ in daemon.published if t == "analysis_done"]) == 2

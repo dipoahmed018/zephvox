@@ -8,6 +8,7 @@ import { Transcript } from "@/components/Transcript";
 import { api } from "@/api";
 import { useAction, useEngine } from "@/engine";
 import { fmtDate, fmtDuration, plural } from "@/format";
+import { hasReport } from "@/lib/sessions";
 import { navigate } from "@/router";
 import type { AnalysisResult, Feedback, Span } from "@/types";
 
@@ -31,7 +32,7 @@ export function Report({ id }: { id?: string }) {
   useEffect(() => {
     if (id) setSessionId(id);
     else run(api.sessions).then((s) => {
-      const done = s?.filter((x) => !x.pending && !x.unanalyzed) ?? [];
+      const done = s?.filter(hasReport) ?? [];
       if (done.length) setSessionId(done[0].id);
       else setMissing(true);
     });

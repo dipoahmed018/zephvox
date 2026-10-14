@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState, PageHead } from "@/components/PageHead";
+import { QueueBadge } from "@/components/QueueBadge";
 import { api } from "@/api";
 import { useAction, useEngine } from "@/engine";
 import { fmtDate, fmtDuration, plural } from "@/format";
+import { inQueue } from "@/lib/sessions";
 import { navigate } from "@/router";
 import type { SessionSummary } from "@/types";
 
@@ -21,7 +23,7 @@ export function History() {
   const load = () => run(api.sessions).then((s) => s && setSessions(s));
   useEffect(() => {
     load();
-  }, [state.lastAnalysis?.seq, state.sessionsVersion]);
+  }, [state.lastAnalysis?.seq, state.sessionsVersion, state.pending]);
 
   const remove = async () => {
     if (!deleting) return;
@@ -47,24 +49,32 @@ export function History() {
       ) : (
         <ul className="surface m-0 list-none divide-y divide-border p-0">
           {sessions.map((s) => (
-            <li key={s.id} className="flex items-center gap-2 pr-3">
+            <li key={s.id} className="flex items-center gap-2 pr-3 first:rounded-t-[var(--radius-card)] last:rounded-b-[var(--radius-card)]">
               <button
                 type="button"
-                disabled={s.pending || s.unanalyzed}
+                disabled={s.pending || s.unanalyzed || inQueue(s)}
                 onClick={() => navigate("report", s.id)}
-                className="group flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-2 px-5 py-4 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent"
+                className="group flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-2 rounded-l-[inherit] px-5 py-4 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent"
               >
                 <span className="w-36 shrink-0">
                   <span className="block font-semibold">{fmtDate(s.created)}</span>
                   <span className="block text-sm text-muted-foreground tabular-nums">{fmtDuration(s.duration ?? 0)}</span>
                 </span>
                 <span className="min-w-0 flex-1 basis-48 truncate text-muted-foreground">
-                  {s.unanalyzed ? "The analysis didn't finish. The recording is kept." : s.preview || "…"}
+                  {s.unanalyzed
+                    ? "The analysis didn't finish. The recording is kept."
+                    : s.analyzing
+                      ? "Being analyzed now. Its report opens when it's done."
+                      : s.queued
+                        ? "Waiting for the analysis before it to finish."
+                        : s.preview || "…"}
                 </span>
                 {s.pending ? (
                   <Badge variant="muted" title="Recorded while the server was unreachable">
                     <CloudOff /> Waiting for the server
                   </Badge>
+                ) : inQueue(s) ? (
+                  <QueueBadge s={s} />
                 ) : s.unanalyzed ? (
                   <Badge variant="alert">Not analyzed</Badge>
                 ) : (
@@ -82,7 +92,7 @@ export function History() {
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label={`Delete the recording from ${fmtDate(s.created)}`} onClick={() => setDeleting(s)}>
+                  <Button variant="ghost" size="icon" aria-label={`Delete the recording from ${fmtDate(s.created)}`} disabled={inQueue(s)} onClick={() => setDeleting(s)}>
                     <Trash2 className="text-muted-foreground" />
                   </Button>
                 </TooltipTrigger>

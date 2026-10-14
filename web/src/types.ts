@@ -41,6 +41,8 @@ export interface SessionSummary {
   preview: string;
   pending?: boolean; // recorded while the server was unreachable
   unanalyzed?: boolean; // kept, but the analysis failed (e.g. a model was missing)
+  analyzing?: boolean; // its analysis is running now
+  queued?: boolean; // recorded, waiting for the running analysis to finish
 }
 
 export interface SyncStatus {

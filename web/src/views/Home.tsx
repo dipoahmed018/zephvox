@@ -5,11 +5,13 @@ import { AnalysisFailed } from "@/components/AnalysisFailed";
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHead, SectionLabel } from "@/components/PageHead";
 import { ProgressSteps } from "@/components/ProgressSteps";
+import { QueueBadge } from "@/components/QueueBadge";
 import { Shortcut, useShortcutsActive } from "@/components/Shortcut";
 import { api } from "@/api";
 import { useAction, useEngine } from "@/engine";
 import { fmtDate, fmtDuration, plural } from "@/format";
 import { cn } from "@/lib/utils";
+import { hasReport, inQueue } from "@/lib/sessions";
 import { navigate } from "@/router";
 import type { SessionSummary, WeakWord } from "@/types";
 
@@ -22,7 +24,7 @@ function Counts({ s }: { s: SessionSummary }) {
   const pron = s.counts.pronunciation ?? 0;
   const gram = s.counts.grammar ?? 0;
   return (
-    <span className="flex flex-wrap gap-1.5">
+    <span className="flex shrink-0 flex-wrap gap-1.5">
       <Badge variant={pron ? "alert" : "muted"}>{plural(pron, "sound")}</Badge>
       <Badge variant={gram ? "mint" : "muted"}>{plural(gram, "grammar issue")}</Badge>
     </span>
@@ -45,11 +47,12 @@ export function Home() {
   useEffect(() => {
     run(api.sessions).then((s) => s && setSessions(s));
     run(api.weakWords).then((w) => w && setWeak(w));
-  }, [state.lastAnalysis?.seq, state.sessionsVersion]);
+  }, [state.lastAnalysis?.seq, state.sessionsVersion, state.pending]);
 
   const upload = (file: File | undefined) => file && run(() => api.upload(file, analyzers));
   const analyzing = state.job?.name === "analysis";
-  const done = sessions?.filter((s) => !s.pending && !s.unanalyzed) ?? [];
+  const done = sessions?.filter(hasReport) ?? [];
+  const queue = sessions?.filter(inQueue) ?? [];
   const failed = sessions?.[0]?.unanalyzed ? sessions[0] : null;
   const waiting = sessions?.filter((s) => s.pending).length ?? 0;
   const [last, ...recent] = done;
@@ -91,7 +94,7 @@ export function Home() {
         </p>
       )}
 
-      {sessions !== null && done.length === 0 && !analyzing ? (
+      {sessions !== null && done.length === 0 && queue.length === 0 && !analyzing ? (
         <EmptyState icon={<AudioLines />} title="Your first recording">
           <p className="m-0 max-w-sm text-muted-foreground">
             Read a few sentences aloud or talk about your day. Your report, with the sounds and sentences to work on, appears
@@ -132,11 +135,11 @@ export function Home() {
           </SectionLabel>
           <ul className="surface m-0 list-none divide-y divide-border p-0">
             {weak.slice(0, 5).map((w) => (
-              <li key={w.target}>
+              <li key={w.target} className="first:rounded-t-[var(--radius-card)] last:rounded-b-[var(--radius-card)]">
                 <button
                   type="button"
                   onClick={() => navigate("practice", undefined, { w: w.target })}
-                  className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors first:rounded-t-[var(--radius-card)] last:rounded-b-[var(--radius-card)] hover:bg-accent"
+                  className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors rounded-[inherit] hover:bg-accent"
                 >
                   <span className="min-w-0 flex-1 truncate font-display text-lg">{w.target}</span>
                   <span className="text-sm text-muted-foreground">
@@ -150,25 +153,35 @@ export function Home() {
         </section>
       )}
 
-      {recent.length > 0 && (
+      {queue.length + recent.length > 0 && (
         <section className="mb-10" aria-labelledby="recent-title">
           <SectionLabel aside={<Button variant="link" size="sm" onClick={() => navigate("history")}>All sessions</Button>}>
-            <span id="recent-title">Earlier</span>
+            <span id="recent-title">Recent</span>
           </SectionLabel>
-          <ul className="m-0 grid list-none gap-2 p-0">
-            {recent.slice(0, 3).map((s) => (
-              <li key={s.id}>
-                <button
-                  type="button"
-                  onClick={() => navigate("report", s.id)}
-                  className="flex w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-accent"
-                >
+          <ul className="surface m-0 list-none divide-y divide-border p-0">
+            {[...queue, ...recent.slice(0, 3)].map((s) => {
+              const row = "flex w-full min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3 text-left";
+              const body = (
+                <>
                   <span className="w-32 shrink-0 text-sm text-muted-foreground">{fmtDate(s.created)}</span>
-                  <span className="min-w-0 flex-1 basis-40 truncate">{s.preview || "…"}</span>
-                  <Counts s={s} />
-                </button>
-              </li>
-            ))}
+                  <span className="min-w-0 flex-1 basis-40 truncate text-muted-foreground">
+                    {inQueue(s) ? "Your report appears here when it's ready." : s.preview || "…"}
+                  </span>
+                  {inQueue(s) ? <QueueBadge s={s} /> : <Counts s={s} />}
+                </>
+              );
+              return (
+                <li key={s.id} className="min-w-0 first:rounded-t-[var(--radius-card)] last:rounded-b-[var(--radius-card)]">
+                  {inQueue(s) ? (
+                    <div className={row}>{body}</div>
+                  ) : (
+                    <button type="button" onClick={() => navigate("report", s.id)} className={`${row} rounded-[inherit] transition-colors hover:bg-accent`}>
+                      {body}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
