@@ -1,35 +1,37 @@
-import { AlertTriangle, Info, X, XCircle } from "lucide-react";
-import { useEffect } from "react";
-import { useEngine } from "../engine";
+import { useEffect, useRef } from "react";
+import { toast } from "sonner";
+import { useEngine } from "@/engine";
 
+/** Engine notices become toasts: warnings fade after a while, errors stay until dismissed. */
 export function Notices() {
   const { state, dispatch } = useEngine();
+  const shown = useRef(new Set<number>());
 
   useEffect(() => {
-    // Warnings and info fade away on their own; errors stay until dismissed.
-    const timers = state.notices
-      .filter((n) => n.kind !== "error")
-      .map((n) => setTimeout(() => dispatch({ type: "dismiss_notice", id: n.id }), 8000));
-    return () => timers.forEach(clearTimeout);
+    const live = new Set(state.notices.map((n) => n.id));
+    for (const n of state.notices) {
+      if (shown.current.has(n.id)) continue;
+      shown.current.add(n.id);
+      const dismiss = () => dispatch({ type: "dismiss_notice", id: n.id });
+      const options = {
+        id: n.id,
+        duration: n.kind === "error" ? Infinity : 8000,
+        closeButton: true,
+        onDismiss: dismiss,
+        onAutoClose: dismiss,
+      };
+      if (n.kind === "error") toast.error(n.text, options);
+      else if (n.kind === "warning") toast.warning(n.text, options);
+      else toast.info(n.text, options);
+    }
+    // Notices pushed out of the engine's short list close here too.
+    for (const id of shown.current) {
+      if (!live.has(id)) {
+        toast.dismiss(id);
+        shown.current.delete(id);
+      }
+    }
   }, [state.notices, dispatch]);
 
-  return (
-    <div className="notices" role="status" aria-live="polite">
-      {state.notices.map((n) => (
-        <div key={n.id} className={`notice ${n.kind}`}>
-          {n.kind === "error" ? (
-            <XCircle size={18} color="var(--error)" />
-          ) : n.kind === "warning" ? (
-            <AlertTriangle size={18} color="var(--amber)" />
-          ) : (
-            <Info size={18} color="var(--teal)" />
-          )}
-          <p>{n.text}</p>
-          <button className="btn ghost small" aria-label="Dismiss" onClick={() => dispatch({ type: "dismiss_notice", id: n.id })}>
-            <X size={14} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
+  return null;
 }

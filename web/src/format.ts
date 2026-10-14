@@ -14,7 +14,7 @@ export function plural(n: number, word: string): string {
 }
 
 export function scoreColor(score: number): string {
-  if (score >= 85) return "var(--teal)";
-  if (score >= 60) return "var(--amber)";
-  return "var(--error)";
+  if (score >= 85) return "var(--success)";
+  if (score >= 60) return "var(--primary)";
+  return "var(--alert)";
 }

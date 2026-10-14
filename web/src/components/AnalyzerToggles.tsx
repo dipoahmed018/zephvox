@@ -1,46 +1,62 @@
-import { Check } from "lucide-react";
 import { useState } from "react";
+import { Switch } from "@/components/ui/switch";
+import { SettingRow } from "./SettingsSection";
 
-const LABELS: Record<string, string> = { pronunciation: "Pronunciation", grammar: "Grammar" };
+const CHECKS: { name: string; label: string; description: string }[] = [
+  { name: "pronunciation", label: "Pronunciation", description: "Compares your sounds with the dictionary." },
+  { name: "grammar", label: "Grammar", description: "Reads your sentences for mistakes." },
+];
 
 interface Props {
   value: string[];
   onChange: (next: string[]) => void;
   /** What can run (client mode: what the server offers); undefined = everything. */
   available?: string[];
+  /** Shown next to the check that was just changed. */
+  savedMark?: React.ReactNode;
 }
 
-export function AnalyzerToggles({ value, onChange, available }: Props) {
-  const [hint, setHint] = useState("");
+/** One switch per check. At least one has to stay on. */
+export function AnalyzerToggles({ value, onChange, available, savedMark }: Props) {
+  const [hint, setHint] = useState<string | null>(null);
   const usable = (name: string) => !available || available.includes(name);
+
   const toggle = (name: string) => {
     // Always in the same order, however they were toggled.
-    const next = Object.keys(LABELS).filter((n) => (n === name ? !value.includes(n) : value.includes(n)));
+    const next = CHECKS.map((c) => c.name).filter((n) => (n === name ? !value.includes(n) : value.includes(n)));
     if (!next.some(usable)) {
-      setHint("At least one check must stay on.");
+      setHint(name);
       return;
     }
-    setHint("");
+    setHint(null);
     onChange(next);
   };
-  const missing = value.filter((v) => !usable(v)).map((v) => LABELS[v] ?? v);
+
   return (
-    <div className="stack" style={{ gap: 6 }}>
-      <div className="row" role="group" aria-label="What to check">
-        {Object.entries(LABELS).map(([name, label]) => {
-          const on = value.includes(name) && usable(name);
-          return (
-            <button key={name} type="button" className="toggle-chip" aria-pressed={on} disabled={!usable(name)}
-                    title={usable(name) ? undefined : "Not available on this server"} onClick={() => toggle(name)}>
-              {on && <Check size={14} />} {label}
-            </button>
-          );
-        })}
-      </div>
-      {hint && <span className="faint">{hint}</span>}
-      {missing.length > 0 && (
-        <span className="faint">{missing.join(" and ")} isn't available on this server, so it's skipped.</span>
-      )}
-    </div>
+    <>
+      {CHECKS.map((c) => {
+        const ok = usable(c.name);
+        const on = value.includes(c.name) && ok;
+        return (
+          <SettingRow
+            key={c.name}
+            label={c.label}
+            htmlFor={`check-${c.name}`}
+            description={
+              !ok ? (
+                <span className="text-alert-ink">{c.label} isn't available on this server, so it's skipped.</span>
+              ) : hint === c.name ? (
+                <span className="text-alert-ink">At least one check must stay on.</span>
+              ) : (
+                c.description
+              )
+            }
+            aside={hint === null && savedMark}
+          >
+            <Switch id={`check-${c.name}`} checked={on} disabled={!ok} onCheckedChange={() => toggle(c.name)} />
+          </SettingRow>
+        );
+      })}
+    </>
   );
 }

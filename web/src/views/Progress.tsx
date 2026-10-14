@@ -1,24 +1,31 @@
-import { TrendingUp } from "lucide-react";
+import { ArrowRight, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api } from "../api";
-import { useAction } from "../engine";
-import { navigate } from "../router";
-import type { History, WeakWord } from "../types";
+import { Button } from "@/components/ui/button";
+import { EmptyState, PageHead, SectionLabel } from "@/components/PageHead";
+import { api } from "@/api";
+import { useAction } from "@/engine";
+import { plural } from "@/format";
+import { cn } from "@/lib/utils";
+import { navigate } from "@/router";
+import type { History, WeakWord } from "@/types";
 
-function Bars({ items, color }: { items: [string, number][]; color?: "amber" }) {
+function Bars({ items, tone }: { items: [string, number][]; tone: "alert" | "mint" }) {
   const max = Math.max(1, ...items.map(([, n]) => n));
   return (
-    <div className="bars">
-      {items.map(([label, n]) => (
-        <div className="bar" key={label}>
-          <span className={color ? "" : "ipa"}>{label}</span>
-          <div className="track">
-            <div className={`fill${color ? ` ${color}` : ""}`} style={{ width: `${(n / max) * 100}%` }} />
-          </div>
-          <span className="num">{n}</span>
-        </div>
+    <ul className="m-0 grid list-none gap-3 p-0">
+      {items.slice(0, 8).map(([label, n]) => (
+        <li key={label} className="grid grid-cols-[minmax(4.5rem,9rem)_1fr_2rem] items-center gap-3">
+          <span className={cn("truncate text-sm", tone === "alert" && "ipa")}>{label}</span>
+          <span className="h-2 overflow-hidden rounded-full bg-muted">
+            <span
+              className={cn("block h-full rounded-full", tone === "alert" ? "bg-alert" : "bg-mint")}
+              style={{ width: `${(n / max) * 100}%` }}
+            />
+          </span>
+          <span className="text-right text-sm text-muted-foreground tabular-nums">{n}</span>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -26,19 +33,22 @@ export function Progress() {
   const run = useAction();
   const [history, setHistory] = useState<History | null>(null);
   const [weak, setWeak] = useState<WeakWord[]>([]);
+  const [allWords, setAllWords] = useState(false);
 
   useEffect(() => {
     run(api.history).then((h) => h && setHistory(h));
     run(api.weakWords).then((w) => w && setWeak(w));
   }, []);
 
-  if (!history) return <p className="muted">Loading…</p>;
+  if (!history) return <p className="text-muted-foreground">Loading…</p>;
   if (history.sessions === 0) {
     return (
-      <div className="card empty">
-        <TrendingUp size={36} />
-        <p>Your progress shows up after your first analyzed recording.</p>
-      </div>
+      <>
+        <PageHead title="Progress" />
+        <EmptyState icon={<TrendingUp />} title="Nothing to show yet">
+          <p className="m-0 max-w-sm text-muted-foreground">After your first recording, the sounds and patterns you mix up most are counted here.</p>
+        </EmptyState>
+      </>
     );
   }
   const sounds = history.categories.pronunciation ?? [];
@@ -46,44 +56,57 @@ export function Progress() {
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>Progress</h1>
-          <p>
-            Across {history.sessions} recording{history.sessions === 1 ? "" : "s"}
-            {history.dismissed ? ` · ${history.dismissed} false alarm${history.dismissed === 1 ? "" : "s"} ignored` : ""}
-          </p>
-        </div>
-      </div>
-      <div className="grid-2">
-        <div className="card">
-          <h2 style={{ marginBottom: 14 }}>Words to practice</h2>
+      <PageHead title="Progress">
+        Across {plural(history.sessions, "recording")}
+        {history.dismissed ? `, not counting ${plural(history.dismissed, "false alarm")} you marked` : ""}.
+      </PageHead>
+
+      <div className="grid gap-10">
+        <section aria-labelledby="queue-title">
+          <SectionLabel>
+            <span id="queue-title">Words to practice</span>
+          </SectionLabel>
           {weak.length === 0 ? (
-            <p className="muted">Nothing outstanding — all recent words passed.</p>
+            <p className="m-0 text-muted-foreground">Nothing outstanding: every recent word has passed.</p>
           ) : (
-            <ul className="queue">
-              {weak.map((w) => (
+            <ul className="surface m-0 list-none divide-y divide-border p-0">
+              {(allWords ? weak : weak.slice(0, 6)).map((w) => (
                 <li key={w.target}>
-                  <button onClick={() => navigate("practice", undefined, { w: w.target })}>
-                    <span>{w.target}</span>
-                    <span className="faint">
+                  <button
+                    type="button"
+                    onClick={() => navigate("practice", undefined, { w: w.target })}
+                    className="flex w-full items-center gap-4 px-5 py-3.5 text-left transition-colors first:rounded-t-[var(--radius-card)] last:rounded-b-[var(--radius-card)] hover:bg-accent"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-display text-lg">{w.target}</span>
+                    <span className="text-sm text-muted-foreground">
                       {w.mistakes}× missed{w.best !== null ? ` · best ${w.best}` : ""}
                     </span>
+                    <ArrowRight className="size-4 text-muted-foreground" />
                   </button>
                 </li>
               ))}
             </ul>
           )}
-        </div>
-        <div className="stack">
-          <div className="card">
-            <h2 style={{ marginBottom: 14 }}>Sounds you mix up</h2>
-            {sounds.length ? <Bars items={sounds} /> : <p className="muted">No pronunciation issues yet.</p>}
-          </div>
-          <div className="card">
-            <h2 style={{ marginBottom: 14 }}>Grammar patterns</h2>
-            {grammar.length ? <Bars items={grammar} color="amber" /> : <p className="muted">No grammar issues yet.</p>}
-          </div>
+          {weak.length > 6 && (
+            <Button variant="link" className="mt-2 px-0" onClick={() => setAllWords(!allWords)}>
+              {allWords ? "Show fewer" : `Show all ${weak.length} words`}
+            </Button>
+          )}
+        </section>
+
+        <div className="grid gap-10 md:grid-cols-2">
+          <section aria-labelledby="sounds-title">
+            <SectionLabel>
+              <span id="sounds-title">Sounds you mix up</span>
+            </SectionLabel>
+            {sounds.length ? <Bars items={sounds} tone="alert" /> : <p className="m-0 text-muted-foreground">No pronunciation issues yet.</p>}
+          </section>
+          <section aria-labelledby="grammar-title">
+            <SectionLabel>
+              <span id="grammar-title">Grammar patterns</span>
+            </SectionLabel>
+            {grammar.length ? <Bars items={grammar} tone="mint" /> : <p className="m-0 text-muted-foreground">No grammar issues yet.</p>}
+          </section>
         </div>
       </div>
     </>

@@ -178,9 +178,9 @@ describe("helpers", () => {
     expect(fmtDuration(65.4)).toBe("1:05");
     expect(plural(1, "word")).toBe("1 word");
     expect(plural(2, "word")).toBe("2 words");
-    expect(scoreColor(90)).toBe("var(--teal)");
-    expect(scoreColor(70)).toBe("var(--amber)");
-    expect(scoreColor(10)).toBe("var(--error)");
+    expect(scoreColor(90)).toBe("var(--success)");
+    expect(scoreColor(70)).toBe("var(--primary)");
+    expect(scoreColor(10)).toBe("var(--alert)");
     const r = parseHash("#/practice?w=think&s=abc");
     expect(r.view).toBe("practice");
     expect(r.params.get("w")).toBe("think");
@@ -211,14 +211,14 @@ describe("AnalyzerToggles", () => {
   it("explains why the last check can't be turned off", async () => {
     const changes: string[][] = [];
     render(<AnalyzerToggles value={["pronunciation"]} onChange={(n) => changes.push(n)} />);
-    await userEvent.click(screen.getByRole("button", { name: /pronunciation/i }));
+    await userEvent.click(screen.getByRole("switch", { name: /pronunciation/i }));
     expect(changes).toEqual([]);
     expect(screen.getByText("At least one check must stay on.")).toBeInTheDocument();
   });
 
   it("disables checks the server can't run", () => {
     render(<AnalyzerToggles value={["pronunciation", "grammar"]} available={["pronunciation"]} onChange={() => {}} />);
-    expect(screen.getByRole("button", { name: /grammar/i })).toBeDisabled();
+    expect(screen.getByRole("switch", { name: /grammar/i })).toBeDisabled();
     expect(screen.getByText(/Grammar isn't available on this server/)).toBeInTheDocument();
   });
 });

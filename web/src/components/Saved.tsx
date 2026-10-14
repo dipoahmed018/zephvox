@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 import { useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 
 /** Settings save as soon as they change; this briefly confirms which one just did. */
 export function useSaved() {
@@ -17,10 +18,17 @@ export function useSaved() {
 
 export function SavedMark({ show, text = "Saved" }: { show: boolean; text?: string }) {
   return (
-    <span className={`saved-mark${show ? " show" : ""}`} role="status" aria-live="polite">
+    <span
+      role="status"
+      aria-live="polite"
+      className={cn(
+        "inline-flex items-center gap-1 text-xs font-semibold text-success-ink transition-opacity duration-300",
+        show ? "opacity-100" : "opacity-0",
+      )}
+    >
       {show && (
         <>
-          <Check size={14} /> {text}
+          <Check className="size-3.5" /> {text}
         </>
       )}
     </span>

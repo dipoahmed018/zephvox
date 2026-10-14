@@ -1,71 +1,99 @@
-import { History as HistoryIcon, Trash2 } from "lucide-react";
+import { ArrowRight, CloudOff, History as HistoryIcon, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { api } from "../api";
-import { useAction, useEngine } from "../engine";
-import { fmtDate, fmtDuration } from "../format";
-import { navigate } from "../router";
-import type { SessionSummary } from "../types";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EmptyState, PageHead } from "@/components/PageHead";
+import { api } from "@/api";
+import { useAction, useEngine } from "@/engine";
+import { fmtDate, fmtDuration, plural } from "@/format";
+import { navigate } from "@/router";
+import type { SessionSummary } from "@/types";
 
 export function History() {
   const { state } = useEngine();
   const run = useAction();
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
+  const [deleting, setDeleting] = useState<SessionSummary | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const load = () => run(api.sessions).then((s) => s && setSessions(s));
   useEffect(() => {
     load();
   }, [state.lastAnalysis?.seq, state.sessionsVersion]);
 
-  const remove = async (s: SessionSummary) => {
-    if (!window.confirm(`Delete the recording from ${fmtDate(s.created)}? This can't be undone.`)) return;
-    await run(() => api.deleteSession(s.id));
+  const remove = async () => {
+    if (!deleting) return;
+    setBusy(true);
+    await run(() => api.deleteSession(deleting.id));
+    setBusy(false);
+    setDeleting(null);
     load();
   };
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1>History</h1>
-          <p>Every recording you've analyzed.</p>
-        </div>
-      </div>
+      <PageHead title="History">
+        {sessions?.length ? `${plural(sessions.length, "recording")}, newest first.` : "Every recording you've analyzed."}
+      </PageHead>
+
       {sessions === null ? (
-        <p className="muted">Loading…</p>
+        <p className="text-muted-foreground">Loading…</p>
       ) : sessions.length === 0 ? (
-        <div className="card empty">
-          <HistoryIcon size={36} />
-          <p>No recordings yet.</p>
-        </div>
+        <EmptyState icon={<HistoryIcon />} title="No recordings yet">
+          <p className="m-0 max-w-sm text-muted-foreground">Each recording you make is kept here with its report.</p>
+        </EmptyState>
       ) : (
-        <ul className="session-list">
+        <ul className="surface m-0 list-none divide-y divide-border p-0">
           {sessions.map((s) => (
-            <li key={s.id} className="session-item">
-              <div className="grow">
-                <div style={{ fontWeight: 600 }}>{fmtDate(s.created)}</div>
-                <div className="preview">{s.preview || "—"}</div>
-              </div>
-              {s.pending ? (
-                <span className="chip amber" title="Recorded while the server was unreachable">waiting for the server</span>
-              ) : (
-                <>
-                  <div className="row" style={{ gap: 6 }}>
-                    <span className="chip teal" title="Pronunciation issues">{s.counts.pronunciation ?? 0}</span>
-                    <span className="chip amber" title="Grammar issues">{s.counts.grammar ?? 0}</span>
-                    <span className="faint" style={{ minWidth: 40, textAlign: "right" }}>{fmtDuration(s.duration ?? 0)}</span>
-                  </div>
-                  <button className="btn small" onClick={() => navigate("report", s.id)}>
-                    Open
-                  </button>
-                </>
-              )}
-              <button className="btn ghost small danger" aria-label="Delete" onClick={() => remove(s)}>
-                <Trash2 size={15} />
+            <li key={s.id} className="flex items-center gap-2 pr-3">
+              <button
+                type="button"
+                disabled={s.pending}
+                onClick={() => navigate("report", s.id)}
+                className="group flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-2 px-5 py-4 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent"
+              >
+                <span className="w-36 shrink-0">
+                  <span className="block font-semibold">{fmtDate(s.created)}</span>
+                  <span className="block text-sm text-muted-foreground tabular-nums">{fmtDuration(s.duration ?? 0)}</span>
+                </span>
+                <span className="min-w-0 flex-1 basis-48 truncate text-muted-foreground">{s.preview || "…"}</span>
+                {s.pending ? (
+                  <Badge variant="muted" title="Recorded while the server was unreachable">
+                    <CloudOff /> Waiting for the server
+                  </Badge>
+                ) : (
+                  <span className="flex items-center gap-1.5">
+                    <Badge variant={s.counts.pronunciation ? "alert" : "muted"}>{plural(s.counts.pronunciation ?? 0, "sound")}</Badge>
+                    <Badge variant={s.counts.grammar ? "mint" : "muted"}>{plural(s.counts.grammar ?? 0, "grammar issue")}</Badge>
+                    <ArrowRight className="ml-1 size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                  </span>
+                )}
               </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label={`Delete the recording from ${fmtDate(s.created)}`} onClick={() => setDeleting(s)}>
+                    <Trash2 className="text-muted-foreground" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Delete</TooltipContent>
+              </Tooltip>
             </li>
           ))}
         </ul>
       )}
+
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title="Delete this recording?"
+        description={deleting ? `The recording from ${fmtDate(deleting.created)} and its report are removed. This can't be undone.` : undefined}
+        confirm="Delete"
+        danger
+        busy={busy}
+        onConfirm={remove}
+      />
     </>
   );
 }

@@ -3,9 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#1C1411" />
+    <meta name="theme-color" content="#F2F7FB" />
     <title>speakcheck</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23D9A05B'/><path d='M9 12v8M13 9v14M17 12v8M21 14v4' stroke='%231C1411' stroke-width='2.5' stroke-linecap='round'/></svg>" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='9' fill='%233A78AE'/><path d='M7 11c4-2.5 7 2.5 11 0s5-1 7 0M7 16.5c4-2.5 7 2.5 11 0s5-1 7 0M7 22c4-2.5 7 2.5 11 0' fill='none' stroke='white' stroke-width='2.2' stroke-linecap='round'/></svg>" />
+    <script>
+      // Apply the saved theme before the first paint, so dark mode doesn't flash light.
+      try {
+        var t = localStorage.getItem("speakcheck.theme");
+        if (t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches))
+          document.documentElement.classList.add("dark");
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

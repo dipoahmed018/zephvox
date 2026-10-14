@@ -1,4 +1,4 @@
-import type { AnalysisResult, Feedback, Finding } from "../types";
+import type { AnalysisResult, Feedback, Finding } from "@/types";
 
 interface Props {
   result: AnalysisResult;
@@ -32,11 +32,11 @@ export function pieces(sentence: string, sentenceIndex: number, findings: Findin
 }
 
 export function Transcript({ result, feedback, selected, onSelect }: Props) {
-  if (!result.sentences.length) return <p className="muted">No speech was recognized in this recording.</p>;
+  if (!result.sentences.length) return <p className="text-muted-foreground">No speech was recognized in this recording.</p>;
   return (
-    <div className="transcript">
+    <div className="grid gap-3 font-display text-xl leading-[1.7] font-light">
       {result.sentences.map((sentence, si) => (
-        <p key={si}>
+        <p key={si} className="m-0">
           {pieces(sentence, si, result.findings).map((piece, pi) => {
             const space = pi > 0 ? " " : "";
             if (piece.finding === null) return space + piece.text;

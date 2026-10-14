@@ -1,6 +1,8 @@
-import { Target } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { useState } from "react";
-import { navigate } from "../router";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { navigate } from "@/router";
 
 const MAX_LENGTH = 100;
 
@@ -9,10 +11,9 @@ export function WordInput({ autoFocus = false }: { autoFocus?: boolean }) {
   const [text, setText] = useState("");
   const clean = text.trim().replace(/\s+/g, " ");
   const valid = clean.length > 0 && /\p{L}/u.test(clean);
-
   return (
     <form
-      className="word-input"
+      className="flex gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         if (!valid) return;
@@ -20,18 +21,18 @@ export function WordInput({ autoFocus = false }: { autoFocus?: boolean }) {
         setText("");
       }}
     >
-      <input
-        className="input"
+      <Input
         aria-label="Word or sentence to practice"
-        placeholder="Type a word…"
+        placeholder="Type any word or sentence"
         maxLength={MAX_LENGTH}
         autoFocus={autoFocus}
         value={text}
         onChange={(e) => setText(e.target.value)}
+        className="h-10 bg-card"
       />
-      <button className="btn primary small" type="submit" disabled={!valid}>
-        <Target size={15} /> Practice
-      </button>
+      <Button type="submit" variant="outline" disabled={!valid}>
+        Practice <ArrowRight />
+      </Button>
     </form>
   );
 }
