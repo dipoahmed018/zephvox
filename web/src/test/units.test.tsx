@@ -4,6 +4,7 @@ import { correctedSentence } from "../components/FindingCard";
 import { PhoneTiles } from "../components/PhoneTiles";
 import { ScoreRing } from "../components/ScoreRing";
 import { Transcript, pieces } from "../components/Transcript";
+import { WordInput } from "../components/WordInput";
 import { initialState, reduce, type EngineState } from "../engine";
 import { fmtDuration, plural, scoreColor } from "../format";
 import { parseHash } from "../router";
@@ -184,5 +185,23 @@ describe("helpers", () => {
     expect(r.params.get("w")).toBe("think");
     expect(parseHash("#/report/2026%2001").id).toBe("2026 01");
     expect(parseHash("#/nonsense").view).toBe("home");
+  });
+});
+
+describe("WordInput", () => {
+  it("opens practice for a typed word, tidying the spacing", async () => {
+    render(<WordInput />);
+    const button = screen.getByRole("button", { name: /practise/i });
+    expect(button).toBeDisabled();
+    await userEvent.type(screen.getByRole("textbox"), "  thorough   work ");
+    await userEvent.click(button);
+    expect(parseHash(window.location.hash).params.get("w")).toBe("thorough work");
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
+
+  it("needs at least one letter", async () => {
+    render(<WordInput />);
+    await userEvent.type(screen.getByRole("textbox"), "123 !");
+    expect(screen.getByRole("button", { name: /practise/i })).toBeDisabled();
   });
 });

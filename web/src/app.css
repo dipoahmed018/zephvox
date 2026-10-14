@@ -939,6 +939,18 @@ select,
   background: var(--teal);
 }
 
+.word-input {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.word-input .input {
+  flex: 1;
+  min-width: 0;
+}
+
 .queue {
   list-style: none;
   margin: 0;

@@ -5,6 +5,7 @@ import { LevelMeter } from "../components/LevelMeter";
 import { PhoneTiles } from "../components/PhoneTiles";
 import { RecordButton } from "../components/RecordButton";
 import { ScoreRing } from "../components/ScoreRing";
+import { WordInput } from "../components/WordInput";
 import { Shortcut, useShortcutsActive } from "../components/Shortcut";
 import { useAction, useEngine } from "../engine";
 import { navigate, type Route } from "../router";
@@ -55,13 +56,14 @@ export function Practice({ route }: { route: Route }) {
         <div className="page-head">
           <div>
             <h1>Practice</h1>
-            <p>Pick a mistaken word from a report, or record a session first.</p>
+            <p>Type any word, pick a mistaken word from a report, or record a session first.</p>
           </div>
         </div>
         <div className="card empty">
           <Target size={36} />
-          <p>{weak === null ? "Loading…" : "No words to practise yet — your weak words appear here after a recording."}</p>
-          <button className="btn primary" onClick={() => navigate("home")}>
+          <p>{weak === null ? "Loading…" : "Type a word to practise, or record yourself and your weak words will appear here."}</p>
+          <WordInput autoFocus />
+          <button className="btn" onClick={() => navigate("home")}>
             Record yourself
           </button>
         </div>
@@ -191,6 +193,10 @@ export function Practice({ route }: { route: Route }) {
         </div>
 
         <aside className="stack">
+          <div className="card">
+            <h2 style={{ marginBottom: 10 }}>Practise any word</h2>
+            <WordInput />
+          </div>
           <div className="card">
             <h2 style={{ marginBottom: 6 }}>Your attempts</h2>
             {stats && stats.attempts > 0 ? (
