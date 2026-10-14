@@ -26,6 +26,16 @@ def remove_daemon_file(data_dir: Path) -> None:
     daemon_file(data_dir).unlink(missing_ok=True)
 
 
+def daemon_at(url: str, transport: httpx.BaseTransport | None = None) -> bool:
+    """True if a speakcheck daemon answers at this URL."""
+    try:
+        with httpx.Client(timeout=1.0, transport=transport) as client:
+            client.get(f"{url}/api/settings").raise_for_status()
+    except httpx.HTTPError:
+        return False
+    return True
+
+
 def find_daemon(data_dir: Path, transport: httpx.BaseTransport | None = None) -> str | None:
     """URL of a live daemon for this data dir, or None."""
     try:
@@ -33,12 +43,7 @@ def find_daemon(data_dir: Path, transport: httpx.BaseTransport | None = None) ->
         url = info["url"]
     except (OSError, ValueError, KeyError):
         return None
-    try:
-        with httpx.Client(timeout=1.0, transport=transport) as client:
-            client.get(f"{url}/api/settings").raise_for_status()
-    except httpx.HTTPError:
-        return None
-    return url
+    return url if daemon_at(url, transport) else None
 
 
 def call(url: str, method: str, path: str, transport: httpx.BaseTransport | None = None, **kwargs: Any) -> Any:

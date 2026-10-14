@@ -285,9 +285,10 @@ class FakeBus:
 
     unique_name = ":1.42"
 
-    def __init__(self, response_code=0, register_fails=True):
+    def __init__(self, response_code=0, register_fails=True, kde_active=None):
         self.code = response_code
         self.register_fails = register_fails
+        self.kde_active = list(kde_active) if kde_active is not None else None  # answers to isActive, in order
         self.calls = []
         self.handler = None
 
@@ -296,6 +297,10 @@ class FakeBus:
 
     async def call(self, msg):
         self.calls.append(msg)
+        if msg.member == "isActive":
+            if not self.kde_active:  # not KDE (or nothing left to say)
+                return SimpleNamespace(message_type=MessageType.ERROR, error_name="ServiceUnknown", body=[])
+            return SimpleNamespace(message_type=MessageType.METHOD_RETURN, body=[self.kde_active.pop(0)])
         if msg.member == "Register" and self.register_fails:
             return SimpleNamespace(message_type=MessageType.ERROR, error_name="NotSupported", body=[])
         if msg.member in ("CreateSession", "BindShortcuts"):
@@ -325,6 +330,26 @@ class TestPortal:
         asyncio.run(session.close())
         assert bus.calls[-1].member == "Close" and session.session_handle is None
         asyncio.run(session.close())  # no session: no call
+
+    def test_rebinds_when_kde_switched_the_shortcuts_off(self):
+        # KDE switches an app's shortcuts off when any of its sessions closes (e.g. a second copy exiting).
+        bus, rebinds = FakeBus(kde_active=[True, False, True]), []
+        session = PortalSession(bus, lambda a: None, response_timeout=2)
+
+        async def run():
+            await session.setup({"cancel": "Ctrl+Alt+X"}, "io.github.speakcheck")
+            await session.watch({"cancel": "Ctrl+Alt+X"}, "io.github.speakcheck", interval=0, on_rebind=lambda: rebinds.append(1))
+
+        asyncio.run(run())  # returns once isActive stops answering, like on a desktop that isn't KDE
+        members = [m.member for m in bus.calls]
+        assert members.count("CreateSession") == 2 and "Close" in members and rebinds == [1]
+        assert next(m for m in bus.calls if m.member == "isActive").path == "/component/io_github_speakcheck"
+
+    def test_watch_returns_at_once_off_kde(self):
+        bus = FakeBus()
+        session = PortalSession(bus, lambda a: None, response_timeout=2)
+        asyncio.run(session.watch({}, "app", interval=0))
+        assert [m.member for m in bus.calls] == ["isActive"]
 
     def test_declined_dialog_raises(self):
         session = PortalSession(FakeBus(response_code=1, register_fails=False), lambda a: None, response_timeout=2)

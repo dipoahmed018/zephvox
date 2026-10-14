@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import os
+import re
 import secrets
 import sys
 import threading
@@ -117,6 +118,35 @@ class PortalSession:
             lambda t: [self.session_handle, shortcuts, "", {"handle_token": V("s", t)}],
         )  # fmt: skip
 
+    async def active_on_kde(self, app_id: str) -> bool | None:
+        """Whether KDE currently delivers this app's shortcuts; None when the desktop isn't KDE.
+
+        KDE switches an app's shortcuts off when any of its portal sessions closes, including a
+        stale one from an earlier run, so a session can look fine and never fire."""
+        reply = await self.bus.call(self._Message(
+            destination="org.kde.kglobalaccel", path="/component/" + re.sub(r"[^A-Za-z0-9_]", "_", app_id),
+            interface="org.kde.kglobalaccel.Component", member="isActive"))  # fmt: skip
+        if reply.message_type == self._MessageType.ERROR or not reply.body:
+            return None
+        return bool(reply.body[0])
+
+    async def watch(self, bindings: dict[str, str], app_id: str, interval: float = 15.0,
+                    on_rebind: Callable[[], None] | None = None) -> None:  # fmt: skip
+        """Re-bind whenever KDE has switched the shortcuts off. Returns at once on other desktops."""
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                active = await self.active_on_kde(app_id)
+                if active is None:
+                    return
+                if not active:
+                    await self.close()
+                    await self.setup(bindings, app_id)
+                    if on_rebind:
+                        on_rebind()
+            except (SpeakcheckError, TimeoutError):
+                continue  # try again next round
+
     async def close(self) -> None:
         if self.session_handle:
             try:
@@ -168,6 +198,7 @@ class PortalTriggers(TriggerProvider):
         self._loop: asyncio.AbstractEventLoop | None = None
         self._session: PortalSession | None = None
         self._bus: Any = None
+        self._watch: asyncio.Task | None = None
 
     def check_available(self) -> Availability:
         if not sys.platform.startswith("linux"):
@@ -213,6 +244,8 @@ class PortalTriggers(TriggerProvider):
                 loop.close()
                 return
             ready.set()
+            if self._session is not None:
+                self._watch = loop.create_task(self._session.watch(bindings, self.settings.app_id, on_rebind=self._log_rebind))
             loop.run_forever()
             loop.close()
 
@@ -221,12 +254,18 @@ class PortalTriggers(TriggerProvider):
         if "e" in error:
             raise SpeakcheckError(f"Could not register shortcuts with the desktop portal: {error['e']}")
 
+    @staticmethod
+    def _log_rebind() -> None:
+        print("· shortcuts were switched off by the desktop; registered them again", file=sys.stderr)
+
     def stop(self) -> None:
-        loop, session, bus = self._loop, self._session, self._bus
+        loop, session, bus, watch = self._loop, self._session, self._bus, self._watch
         if loop is None:
             return
 
         async def shutdown():
+            if watch:
+                watch.cancel()
             if session:
                 await session.close()
             if bus:
@@ -234,7 +273,7 @@ class PortalTriggers(TriggerProvider):
 
         asyncio.run_coroutine_threadsafe(shutdown(), loop).result(timeout=5)
         loop.call_soon_threadsafe(loop.stop)
-        self._loop = self._session = self._bus = None
+        self._loop = self._session = self._bus = self._watch = None
 
     def close(self) -> None:
         self.stop()

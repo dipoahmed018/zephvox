@@ -474,9 +474,40 @@ class TestClientAndCLI:
         monkeypatch.setattr(uvicorn, "run", fake_run)
         monkeypatch.setattr(web_server.threading, "Timer", lambda d, fn, args: SimpleNamespace(
             start=lambda: opened.append(args[0])))  # fmt: skip
+        monkeypatch.setattr(web_server, "daemon_at", lambda url: False)
+        monkeypatch.setattr(web_server, "port_free", lambda host, port: True)
         web_server.serve(engine, host="0.0.0.0", port=9001, open_browser=True, shortcuts=False)
         assert ran == {"host": "0.0.0.0", "port": 9001} and opened == ["http://127.0.0.1:9001"]
         assert not web_client.daemon_file(engine.config.engine.data_dir).exists()
+
+    def test_serve_hands_over_to_a_running_daemon(self, engine, monkeypatch, capsys):
+        # A second copy (the launcher clicked again) must not touch the shortcuts: when it exited,
+        # the desktop switched them off for the copy that was already running.
+        import uvicorn
+
+        opened = []
+        monkeypatch.setattr(uvicorn, "run", lambda *a, **k: pytest.fail("started a second server"))
+        monkeypatch.setattr("speakcheck.web.daemon.Daemon", lambda *a, **k: pytest.fail("created a second daemon"))
+        monkeypatch.setattr(web_server, "daemon_at", lambda url: url == "http://127.0.0.1:8765")
+        monkeypatch.setattr(web_server.webbrowser, "open", opened.append)
+        web_client.write_daemon_file(engine.config.engine.data_dir, "http://127.0.0.1:8765")
+        web_server.serve(engine, open_browser=True)
+        assert opened == ["http://127.0.0.1:8765"] and "already running" in capsys.readouterr().err
+        assert web_client.daemon_file(engine.config.engine.data_dir).exists()  # still points at the running one
+
+    def test_serve_explains_a_port_taken_by_something_else(self, engine, monkeypatch):
+        monkeypatch.setattr(web_server, "daemon_at", lambda url: False)
+        monkeypatch.setattr(web_server, "port_free", lambda host, port: False)
+        with pytest.raises(SpeakcheckError, match="--port"):
+            web_server.serve(engine, port=9002)
+
+    def test_port_free(self):
+        import socket
+
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            sock.listen()
+            assert not web_server.port_free("127.0.0.1", sock.getsockname()[1])
 
 
 def test_availability_helper_type():
