@@ -1,4 +1,4 @@
-// Mirrors the Python data model (src/speakcheck/engine/models.py and friends).
+// Mirrors the Python data model (src/zephvox/engine/models.py and friends).
 
 export type Span = [number, number];
 

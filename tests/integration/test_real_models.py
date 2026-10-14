@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from speakcheck.engine.capabilities import detect_gpu
-from speakcheck.engine.config import Config, EngineSettings
-from speakcheck.engine.engine import Engine
-from speakcheck.engine.models import Segment, Transcript, Word
+from zephvox.engine.capabilities import detect_gpu
+from zephvox.engine.config import Config, EngineSettings
+from zephvox.engine.engine import Engine
+from zephvox.engine.models import Segment, Transcript, Word
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -65,8 +65,8 @@ def test_gpu_is_visible_to_torch():
 
 @pytest.mark.llm
 def test_live_llm_finds_grammar_mistake(tmp_path):
-    from speakcheck.analyzers.base import AnalysisContext
-    from speakcheck.analyzers.grammar.analyzer import GrammarAnalyzer
+    from zephvox.analyzers.base import AnalysisContext
+    from zephvox.analyzers.grammar.analyzer import GrammarAnalyzer
 
     engine = Engine(config=Config(engine=EngineSettings(data_dir=tmp_path)))
     words = [Word(t, i * 0.3, i * 0.3 + 0.3) for i, t in enumerate("Yesterday he go to the market.".split())]

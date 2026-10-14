@@ -1,4 +1,4 @@
-# Breeze: speakcheck's design
+# Breeze: zephvox's design
 
 Speaking is breath, and breath is moving air. The interface is calm, airy and light-first, like a
 meditation app for your voice. Thin lines of moving air are the signature element, and they always

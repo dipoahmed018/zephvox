@@ -1,7 +1,7 @@
 import pytest
 
-from speakcheck.engine.engine import Engine
-from speakcheck.engine.errors import PluginNotFound, ProviderUnavailable, RecordingError
+from zephvox.engine.engine import Engine
+from zephvox.engine.errors import PluginNotFound, ProviderUnavailable, RecordingError
 from pathlib import Path
 
 from tests.conftest import FakeCapture, FakePhonemes, FakeSTT
@@ -186,16 +186,16 @@ def test_close_releases_providers(engine):
 
 
 def test_default_construction_detects_caps(tmp_path, monkeypatch):
-    monkeypatch.setenv("SPEAKCHECK_CONFIG", str(tmp_path / "none.toml"))
-    monkeypatch.setenv("SPEAKCHECK_HOME", str(tmp_path / "home"))
-    monkeypatch.setattr("speakcheck.engine.engine.detect", lambda: "caps!")
+    monkeypatch.setenv("ZEPHVOX_CONFIG", str(tmp_path / "none.toml"))
+    monkeypatch.setenv("ZEPHVOX_HOME", str(tmp_path / "home"))
+    monkeypatch.setattr("zephvox.engine.engine.detect", lambda: "caps!")
     e = Engine()
     assert e.caps == "caps!"
     assert e.sessions.root == tmp_path / "home" / "sessions"
 
 
 def test_prepare_failure_falls_back_and_closes(engine, registry):
-    from speakcheck.engine.errors import LLMError
+    from zephvox.engine.errors import LLMError
     from tests.conftest import FakeLLM
 
     closed = []

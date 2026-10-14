@@ -1,18 +1,21 @@
-# speakcheck installer for Windows. Also updates an existing install.
+# zephvox installer for Windows. Also updates an existing install.
 #
-#   powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.ps1 | iex"
+#   powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex"
 #
-# Environment: SPEAKCHECK_DIR (default %LOCALAPPDATA%\speakcheck), SPEAKCHECK_VERSION (a release tag;
-# default latest), SPEAKCHECK_SETUP_ARGS (passed to `speakcheck setup`, e.g. "--profile cpu --yes").
+# Environment: ZEPHVOX_DIR (default %LOCALAPPDATA%\zephvox), ZEPHVOX_VERSION (a release tag;
+# default latest), ZEPHVOX_SETUP_ARGS (passed to `zephvox setup`, e.g. "--profile cpu --yes").
 #
-# What it does: installs uv if needed, downloads speakcheck into one folder, installs the small core,
-# then hands over to `speakcheck setup`, which detects your hardware and installs the rest.
+# What it does: installs uv if needed, downloads zephvox into one folder, installs the small core,
+# then hands over to `zephvox setup`, which detects your hardware and installs the rest.
 
 & {
     $ErrorActionPreference = "Stop"
     $ProgressPreference = "SilentlyContinue"  # Invoke-WebRequest is many times slower with it
-    $Repo = "dipoahmed018/speakcheck"
-    $Dir = if ($env:SPEAKCHECK_DIR) { $env:SPEAKCHECK_DIR } else { Join-Path $env:LOCALAPPDATA "speakcheck" }
+    $Repo = "dipoahmed018/zephvox"
+    $Old = Join-Path $env:LOCALAPPDATA "speakcheck"   # an install made under the app's old name is updated in place
+    $New = Join-Path $env:LOCALAPPDATA "zephvox"
+    $Dir = if ($env:ZEPHVOX_DIR) { $env:ZEPHVOX_DIR } elseif ($env:SPEAKCHECK_DIR) { $env:SPEAKCHECK_DIR } `
+           elseif ((Test-Path $Old) -and -not (Test-Path $New)) { $Old } else { $New }
 
     if (Test-Path (Join-Path $Dir ".git")) { throw "$Dir is a git checkout: update it with git pull instead" }
 
@@ -27,8 +30,8 @@
         }
     }
 
-    # 2. speakcheck itself: the latest release, or main while there is none
-    $Version = $env:SPEAKCHECK_VERSION
+    # 2. zephvox itself: the latest release, or main while there is none
+    $Version = $env:ZEPHVOX_VERSION
     if (-not $Version) {
         try { $Version = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name } catch { $Version = $null }
     }
@@ -38,8 +41,8 @@
         $Version = "main"
         $Url = "https://github.com/$Repo/archive/refs/heads/main.zip"
     }
-    Write-Host "Downloading speakcheck $Version into $Dir..."
-    $Tmp = Join-Path ([IO.Path]::GetTempPath()) ("speakcheck-" + [guid]::NewGuid())
+    Write-Host "Downloading zephvox $Version into $Dir..."
+    $Tmp = Join-Path ([IO.Path]::GetTempPath()) ("zephvox-" + [guid]::NewGuid())
     New-Item -ItemType Directory -Path $Tmp | Out-Null
     try {
         $Zip = Join-Path $Tmp "source.zip"
@@ -61,10 +64,10 @@
     Push-Location $Dir
     try {
         & $uv sync --no-dev --frozen --quiet
-        if ($LASTEXITCODE -ne 0) { throw "installing speakcheck's core failed" }
+        if ($LASTEXITCODE -ne 0) { throw "installing zephvox's core failed" }
         Write-Host "Starting setup..."
-        $SetupArgs = if ($env:SPEAKCHECK_SETUP_ARGS) { $env:SPEAKCHECK_SETUP_ARGS -split " " } else { @() }
-        & $uv run --no-sync python -m speakcheck.cli setup --installed-version $Version @SetupArgs
+        $SetupArgs = if ($env:ZEPHVOX_SETUP_ARGS) { $env:ZEPHVOX_SETUP_ARGS -split " " } else { @() }
+        & $uv run --no-sync python -m zephvox.cli setup --installed-version $Version @SetupArgs
     } finally {
         Pop-Location
     }

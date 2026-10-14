@@ -98,7 +98,7 @@ function General({ remote, server }: { remote: boolean; server: ServerInfo | nul
         {triggers && !triggers.active && (
           <p className="m-0 py-4 text-sm text-muted-foreground">
             {triggers.error ? <span className="text-alert-ink">{triggers.error}. </span> : "Registering shortcuts… "}
-            You can still bind <code>speakcheck toggle</code> and <code>speakcheck practice</code> in your system's keyboard settings.
+            You can still bind <code>zephvox toggle</code> and <code>zephvox practice</code> in your system's keyboard settings.
           </p>
         )}
       </SettingsSection>
@@ -167,8 +167,8 @@ function Devices({ remote }: { remote: boolean }) {
   return (
     <div className="grid gap-6">
       {remote && <p className="m-0 text-sm text-muted-foreground">Analysis runs on the server; these drivers are this computer's own.</p>}
-      <Stage id="capture" kind="capture" title="Microphone driver" description="How speakcheck records. The microphone itself is chosen under General." />
-      <Stage id="triggers" kind="triggers" title="Shortcut driver" description="How the global shortcuts reach speakcheck while another app is in front." />
+      <Stage id="capture" kind="capture" title="Microphone driver" description="How zephvox records. The microphone itself is chosen under General." />
+      <Stage id="triggers" kind="triggers" title="Shortcut driver" description="How the global shortcuts reach zephvox while another app is in front." />
     </div>
   );
 }
@@ -236,7 +236,7 @@ function About({ remote }: { remote: boolean }) {
         )}
       </SettingsSection>
       <p className="m-0 text-xs text-muted-foreground">
-        speakcheck is free software under the {LICENSE_NAME} license:{" "}
+        zephvox is free software under the {LICENSE_NAME} license:{" "}
         <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="text-link underline underline-offset-2">
           source code
         </a>
@@ -272,7 +272,7 @@ export function Settings() {
   return (
     <>
       <PageHead title="Settings">
-        {remote ? "This computer records; a speakcheck server does the analysis." : "Everything speakcheck does, and how."} Changes are saved as you
+        {remote ? "This computer records; a zephvox server does the analysis." : "Everything zephvox does, and how."} Changes are saved as you
         make them.
       </PageHead>
 

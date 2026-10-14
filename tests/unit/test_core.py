@@ -6,16 +6,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from speakcheck.engine import capabilities
-from speakcheck.engine import config as config_mod
-from speakcheck.engine.artifacts import ArtifactRegistry, ArtifactSpec, ArtifactStore
-from speakcheck.engine.capabilities import SystemCapabilities, detect, detect_ram_gb
-from speakcheck.engine.config import Config, load_config, load_env, parse_env, project_root
-from speakcheck.engine.errors import ConfigError, PlanError, PluginNotFound, SpeakcheckError
-from speakcheck.engine.models import AnalysisResult, Finding
-from speakcheck.engine.planner import plan
-from speakcheck.engine.registry import Registry
-from speakcheck.engine.session import SessionStore
+from zephvox.engine import capabilities
+from zephvox.engine import config as config_mod
+from zephvox.engine.artifacts import ArtifactRegistry, ArtifactSpec, ArtifactStore
+from zephvox.engine.capabilities import SystemCapabilities, detect, detect_ram_gb
+from zephvox.engine.config import Config, load_config, load_env, parse_env, project_root
+from zephvox.engine.errors import ConfigError, PlanError, PluginNotFound, ZephvoxError
+from zephvox.engine.models import AnalysisResult, Finding
+from zephvox.engine.planner import plan
+from zephvox.engine.registry import Registry
+from zephvox.engine.session import SessionStore
 
 
 class TestPlanner:
@@ -73,8 +73,8 @@ class TestRegistry:
 
     def test_discovers_entry_points_and_records_broken(self):
         eps = {
-            "speakcheck.stt": [self._ep("good", "tests.unit.test_core:Plugin", "speakcheck.stt"),
-                               self._ep("bad", "no.such.module:X", "speakcheck.stt")],
+            "zephvox.stt": [self._ep("good", "tests.unit.test_core:Plugin", "zephvox.stt"),
+                               self._ep("bad", "no.such.module:X", "zephvox.stt")],
         }  # fmt: skip
         reg = Registry(lambda group: eps.get(group, []))
         assert reg.get("stt", "good") is Plugin
@@ -82,7 +82,7 @@ class TestRegistry:
         assert ("stt", "bad") in reg.broken
 
     def test_explicit_registration_wins(self):
-        eps = {"speakcheck.stt": [self._ep("x", "tests.unit.test_core:Plugin", "speakcheck.stt")]}
+        eps = {"zephvox.stt": [self._ep("x", "tests.unit.test_core:Plugin", "zephvox.stt")]}
         reg = Registry(lambda group: eps.get(group, []))
         reg.register("stt", "x", int)
         assert reg.get("stt", "x") is int
@@ -104,8 +104,8 @@ class TestRegistry:
 
 class TestConfig:
     def test_defaults_when_file_missing(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("SPEAKCHECK_CONFIG", str(tmp_path / "none.toml"))
-        monkeypatch.setenv("SPEAKCHECK_HOME", str(tmp_path / "home"))
+        monkeypatch.setenv("ZEPHVOX_CONFIG", str(tmp_path / "none.toml"))
+        monkeypatch.setenv("ZEPHVOX_HOME", str(tmp_path / "home"))
         c = load_config()
         assert c.providers["stt"] == ["hf-whisper", "faster-whisper"]
         assert c.engine.data_dir == tmp_path / "home"
@@ -138,10 +138,10 @@ class TestConfig:
 
     def test_project_root_found_from_code_location(self, tmp_path):
         assert (project_root() / "pyproject.toml").exists()
-        assert project_root(tmp_path / "src" / "speakcheck") is None  # installed as a plain package
+        assert project_root(tmp_path / "src" / "zephvox") is None  # installed as a plain package
 
     def test_project_config_wins_over_user_config(self, tmp_path, monkeypatch):
-        monkeypatch.delenv("SPEAKCHECK_CONFIG", raising=False)
+        monkeypatch.delenv("ZEPHVOX_CONFIG", raising=False)
         root, user = tmp_path / "root", tmp_path / "user"
         root.mkdir(), user.mkdir()
         monkeypatch.setattr(config_mod, "config_dirs", lambda: [root, user])
@@ -150,7 +150,7 @@ class TestConfig:
         assert config_mod.default_config_path() == user / "config.toml"
         (root / "config.toml").touch()
         assert config_mod.default_config_path() == root / "config.toml"
-        monkeypatch.setenv("SPEAKCHECK_CONFIG", str(tmp_path / "x.toml"))
+        monkeypatch.setenv("ZEPHVOX_CONFIG", str(tmp_path / "x.toml"))
         assert config_mod.default_config_path() == tmp_path / "x.toml"
 
     def test_example_config_loads(self, tmp_path):
@@ -284,5 +284,5 @@ class TestSessions:
         assert loaded == result and loaded.by_analyzer("grammar") == [finding]
 
     def test_unknown_session(self, tmp_path):
-        with pytest.raises(SpeakcheckError, match="No session"):
+        with pytest.raises(ZephvoxError, match="No session"):
             SessionStore(tmp_path).get("nope")

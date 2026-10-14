@@ -1,11 +1,11 @@
-# speakcheck configuration.
+# zephvox configuration.
 #
 #   cp config.example.toml config.toml
 #
 # config.toml is git-ignored, so your local choices are never committed. Everything below is
 # commented out and shows the default: uncomment only what you want to change.
 #
-# `speakcheck setup` writes the chosen profile on the first line: large, standard, small, cpu, cpu-light,
+# `zephvox setup` writes the chosen profile on the first line: large, standard, small, cpu, cpu-light,
 # or custom (your own answers to setup's questions, saved in custom-profile.toml next to this file).
 # A profile changes some of the defaults below (model sizes, CPU vs GPU); anything you set here wins.
 # Secrets and machine-specific environment variables go in .env (see .env.example).
@@ -13,13 +13,13 @@
 
 [engine]
 # analyzers = ["pronunciation", "grammar"]
-# data_dir = "~/.local/share/speakcheck"   # sessions and recordings (default: your OS's app-data folder)
+# data_dir = "~/.local/share/zephvox"   # sessions and recordings (default: your OS's app-data folder)
 # sentence_split = true
 # practice_auto_stop_s = 1.2               # practice stops after this much silence (0 = manual stop only)
 # practice_max_s = 10.0
 
 # Drivers for each stage, in order of preference: the first available one is used.
-# Run `uv run speakcheck providers` to see which are available and why the others are not.
+# Run `uv run zephvox providers` to see which are available and why the others are not.
 [providers]
 # capture = ["pipewire", "sounddevice"]    # Windows/macOS: ["sounddevice"]
 # stt = ["hf-whisper", "faster-whisper"]
@@ -122,26 +122,26 @@
 [provider.pipewire]
 # device = "alsa_input.usb-..."  # PipeWire node name; default = default microphone
 
-# --- server mode (`speakcheck server serve`) ----------------------------------------------
+# --- server mode (`zephvox server serve`) ----------------------------------------------
 
 [server]
 # share = false               # serve other devices whenever the app runs ("Share this computer" in the page)
 # host = "127.0.0.1"          # 0.0.0.0 to listen on every interface (put HTTPS in front: Caddy, nginx)
 # port = 8770
-# data_dir = "~/.local/share/speakcheck/server"   # accounts, jobs (default: <engine data_dir>/server)
+# data_dir = "~/.local/share/zephvox/server"   # accounts, jobs (default: <engine data_dir>/server)
 # job_ttl_hours = 24          # finished jobs (audio and result) are deleted after this
 # max_upload_mb = 200
 # practice_workers = 2        # practice runs on its own threads, never behind long jobs
 # webhook_allow_private = false   # allow webhooks to private/local addresses
 
-[server.limits]               # per account; `speakcheck server limits set` overrides them
+[server.limits]               # per account; `zephvox server limits set` overrides them
 # max_audio_minutes = 30
 # max_jobs = 2                # waiting or running at once
 # storage_mb = 2048           # synced history
 # requests_per_minute = 120
 
-# --- client mode: analyze on a speakcheck server ------------------------------------------
-# Usually set by `speakcheck setup --role client` or the page's settings (which win over this file).
+# --- client mode: analyze on a zephvox server ------------------------------------------
+# Usually set by `zephvox setup --role client` or the page's settings (which win over this file).
 # This device's key is kept apart, in remote.json in the data folder.
 
 [remote]

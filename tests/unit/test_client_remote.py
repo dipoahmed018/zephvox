@@ -9,20 +9,20 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from speakcheck import cli
-from speakcheck.client import credentials
-from speakcheck.client import remote as remote_mod
-from speakcheck.client.backend import LocalBackend, RemoteBackend, make_backend
-from speakcheck.client.remote import PracticeStream, expand_headers, is_insecure, read_pcm
-from speakcheck.engine import audio
-from speakcheck.engine.config import Config, EngineSettings, ServerSettings, load_user_settings
-from speakcheck.engine.engine import Engine
-from speakcheck.engine.errors import ProviderUnavailable, SpeakcheckError
-from speakcheck.install import wizard
-from speakcheck.install.state import InstallState, extras_for
-from speakcheck.server.app import create_server_app
-from speakcheck.server.service import Server
-from speakcheck.web.daemon import Daemon
+from zephvox import cli
+from zephvox.client import credentials
+from zephvox.client import remote as remote_mod
+from zephvox.client.backend import LocalBackend, RemoteBackend, make_backend
+from zephvox.client.remote import PracticeStream, expand_headers, is_insecure, read_pcm
+from zephvox.engine import audio
+from zephvox.engine.config import Config, EngineSettings, ServerSettings, load_user_settings
+from zephvox.engine.engine import Engine
+from zephvox.engine.errors import ProviderUnavailable, ZephvoxError
+from zephvox.install import wizard
+from zephvox.install.state import InstallState, extras_for
+from zephvox.server.app import create_server_app
+from zephvox.server.service import Server
+from zephvox.web.daemon import Daemon
 from tests.unit.test_install import Recorder, install_root, setup_args  # noqa: F401  (fixture and helpers)
 from tests.unit.test_web import FakeTTS
 
@@ -83,12 +83,12 @@ def client_daemon(engine, remote):
 
 
 def connected(daemon, remote):
-    return daemon.connect(URL, remote.invite(), "laptop", {"X-Proxy": "${SPEAKCHECK_TEST_TOKEN}"})
+    return daemon.connect(URL, remote.invite(), "laptop", {"X-Proxy": "${ZEPHVOX_TEST_TOKEN}"})
 
 
 class TestConnect:
     def test_invite_key_file_and_settings(self, client_daemon, remote, engine, monkeypatch):
-        monkeypatch.setenv("SPEAKCHECK_TEST_TOKEN", "t0k")
+        monkeypatch.setenv("ZEPHVOX_TEST_TOKEN", "t0k")
         info = connected(client_daemon, remote)
         assert info["mode"] == "remote" and info["connected"] and info["account"] == "alice"
         assert info["reachable"] and info["headers"] == ["X-Proxy"] and info["device"] == "laptop"
@@ -98,7 +98,7 @@ class TestConnect:
         assert creds.key.startswith("sk_") and remote.server.db.device_for_key(creds.key)
         assert credentials.load(engine.config.engine.data_dir, "http://other") is None
         stored = load_user_settings(engine.config.engine.data_dir)["remote"]
-        assert stored["url"] == URL and stored["headers"] == {"X-Proxy": "${SPEAKCHECK_TEST_TOKEN}"}  # not expanded
+        assert stored["url"] == URL and stored["headers"] == {"X-Proxy": "${ZEPHVOX_TEST_TOKEN}"}  # not expanded
         assert isinstance(client_daemon.backend, RemoteBackend)
         assert client_daemon.backend.client.headers["X-Proxy"] == "t0k"
 
@@ -116,16 +116,16 @@ class TestConnect:
 
     def test_mode_rules(self, client_daemon, remote, monkeypatch):
         monkeypatch.setattr(client_daemon, "engine_installed", lambda: False)
-        with pytest.raises(SpeakcheckError, match="isn't installed"):
+        with pytest.raises(ZephvoxError, match="isn't installed"):
             client_daemon.set_remote({"mode": "local"})
-        with pytest.raises(SpeakcheckError, match="address"):
+        with pytest.raises(ZephvoxError, match="address"):
             client_daemon.set_remote({"mode": "remote"})
         client_daemon.set_remote({"mode": "remote", "url": URL + "/"})
         with pytest.raises(ProviderUnavailable, match="redeem an invite"):
             client_daemon.backend  # noqa: B018
 
     def test_bad_invite(self, client_daemon, remote):
-        with pytest.raises(SpeakcheckError, match="403"):
+        with pytest.raises(ZephvoxError, match="403"):
             client_daemon.connect(URL, "inv_wrong", "laptop")
 
 
@@ -154,7 +154,7 @@ class TestRemoteAnalysis:
     def test_failed_job_raises(self, client_daemon, remote, engine, wav_file):
         connected(client_daemon, remote)
         remote.server.engine.config.providers["stt"] = []
-        with pytest.raises(SpeakcheckError, match="couldn't analyze"):
+        with pytest.raises(ZephvoxError, match="couldn't analyze"):
             client_daemon.backend.analyze(wav_file, ["pronunciation"])
 
     def test_local_mode_uses_the_engine(self, engine):
@@ -212,7 +212,7 @@ class TestInstallFromGui:
                 return 0
 
         monkeypatch.setattr(client_daemon, "engine_installed", lambda: True)
-        monkeypatch.setattr("speakcheck.install.ollama.find", lambda: None)
+        monkeypatch.setattr("zephvox.install.ollama.find", lambda: None)
         client_daemon.start_install(runner=FakeProc)
         for _ in range(200):
             if not client_daemon.install["running"]:
@@ -270,7 +270,7 @@ class TestClientSetup:
         args = setup_args(tmp_path, role="client", server_url=URL)
         setup = wizard.Setup(args, wizard.Console(interactive=False, out=lambda *a: None), runner=Recorder(),
                              detect=lambda root: None)  # fmt: skip
-        with pytest.raises(SpeakcheckError, match="invite code is needed"):
+        with pytest.raises(ZephvoxError, match="invite code is needed"):
             setup.run_all()
 
 
@@ -286,5 +286,5 @@ class TestServerChecks:
         result = client_daemon.backend.analyze(wav_file, ["pronunciation", "grammar"])
         assert result.analyzers == ["pronunciation"]
         assert warnings[0] == "Grammar isn't available on this server right now, so it was skipped."
-        with pytest.raises(SpeakcheckError, match="can't run any"):
+        with pytest.raises(ZephvoxError, match="can't run any"):
             client_daemon.backend.analyze(wav_file, ["grammar"])

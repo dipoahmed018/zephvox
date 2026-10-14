@@ -12,14 +12,14 @@ import pytest
 import respx
 from fastapi.testclient import TestClient
 
-from speakcheck import cli
-from speakcheck.engine.errors import SpeakcheckError
-from speakcheck.engine.models import Finding
-from speakcheck.providers.base import Availability, TriggerProvider, TTSProvider
-from speakcheck.web import client as web_client
-from speakcheck.web import server as web_server
-from speakcheck.web.app import create_app
-from speakcheck.web.daemon import Daemon, EventHub, jsonable
+from zephvox import cli
+from zephvox.engine.errors import ZephvoxError
+from zephvox.engine.models import Finding
+from zephvox.providers.base import Availability, TriggerProvider, TTSProvider
+from zephvox.web import client as web_client
+from zephvox.web import server as web_server
+from zephvox.web.app import create_app
+from zephvox.web.daemon import Daemon, EventHub, jsonable
 from tests.conftest import FakeLLM
 
 
@@ -30,7 +30,7 @@ class FakeTTS(TTSProvider):
     def synthesize(self, text):
         type(self).calls += 1
         if text == "boom":
-            raise SpeakcheckError("synth failed")
+            raise ZephvoxError("synth failed")
         return b"RIFF" + text.encode()
 
 
@@ -106,7 +106,7 @@ class TestDaemonActions:
         assert [t for t, _ in daemon.published if t.startswith("job_")] == ["job_queued", "job_started", "job_finished"]
 
     def test_practice_needs_target_then_scores(self, daemon):
-        with pytest.raises(SpeakcheckError, match="Pick a word"):
+        with pytest.raises(ZephvoxError, match="Pick a word"):
             daemon.start(mode="practice")
         daemon.set_practice_target("think", session_id="s1")
         assert published(daemon, "practice_target")[-1] == {"target": {"text": "think", "session_id": "s1"}}
@@ -121,7 +121,7 @@ class TestDaemonActions:
     def test_toggle_never_crosses_modes(self, daemon):
         daemon.set_practice_target("think")
         daemon.toggle("analysis")
-        with pytest.raises(SpeakcheckError, match="analysis recording is in progress"):
+        with pytest.raises(ZephvoxError, match="analysis recording is in progress"):
             daemon.toggle("practice")
         assert daemon.engine.is_recording()
         daemon.cancel()
@@ -139,7 +139,7 @@ class TestDaemonActions:
 
     def test_job_errors_are_published(self, daemon):
         def boom():
-            raise SpeakcheckError("model exploded")
+            raise ZephvoxError("model exploded")
 
         def crash():
             raise ValueError("bug")
@@ -202,7 +202,7 @@ class TestTicker:
         stops = []
         monkeypatch.setattr(daemon, "stop", lambda: stops.append(True))
         clock = iter(range(0, 1000))
-        monkeypatch.setattr("speakcheck.web.daemon.time.monotonic", lambda: next(clock))
+        monkeypatch.setattr("zephvox.web.daemon.time.monotonic", lambda: next(clock))
         daemon._stop = fake_stop(*([False] * len(statuses) + [True]))
         daemon._tick()
         return stops
@@ -236,7 +236,7 @@ class TestTicker:
         monkeypatch.setattr(daemon.engine, "recording_status", lambda: next(seq, None))
 
         def failing_stop():
-            raise SpeakcheckError("mic unplugged")
+            raise ZephvoxError("mic unplugged")
 
         monkeypatch.setattr(daemon, "stop", failing_stop)
         daemon._stop = fake_stop(False, True)
@@ -389,7 +389,7 @@ class TestAPI:
         assert daemon.hub._subscribers == []
 
     def test_events_keepalive(self, daemon, monkeypatch):
-        monkeypatch.setattr("speakcheck.web.app.KEEPALIVE_S", 0.01)
+        monkeypatch.setattr("zephvox.web.app.KEEPALIVE_S", 0.01)
         app = create_app(daemon)
         endpoint = next(r.endpoint for r in app.routes if getattr(r, "path", "") == "/api/events")
 
@@ -406,10 +406,10 @@ class TestAPI:
         assert asyncio.run(main())[1] == ": keepalive\n\n"
 
     def test_frontend_or_placeholder(self, daemon, monkeypatch, tmp_path):
-        monkeypatch.setattr("speakcheck.web.app.STATIC_DIR", tmp_path)
+        monkeypatch.setattr("zephvox.web.app.STATIC_DIR", tmp_path)
         assert "hasn't been built" in TestClient(create_app(daemon)).get("/").text
-        (tmp_path / "index.html").write_text("<h1>speakcheck app</h1>")
-        assert "speakcheck app" in TestClient(create_app(daemon)).get("/").text
+        (tmp_path / "index.html").write_text("<h1>zephvox app</h1>")
+        assert "zephvox app" in TestClient(create_app(daemon)).get("/").text
 
 
 URL = "http://127.0.0.1:8765"
@@ -456,7 +456,7 @@ class TestClientAndCLI:
         status.respond(json={"recording": {"mode": "analysis"}})
         assert run("practice", "-q")[1].startswith("Stopped")
         assert json.loads(toggle.calls.last.request.content) == {"mode": "practice"}
-        assert "Run `speakcheck stop`" in run("start", "-q")[1]
+        assert "Run `zephvox stop`" in run("start", "-q")[1]
         assert "report will appear" in run("stop", "-q")[1]
         assert "report will appear" in run("record", "--analyzers", "grammar", "-q")[1]
         assert json.loads(start.calls.last.request.content)["analyzers"] == ["grammar"]
@@ -467,7 +467,7 @@ class TestClientAndCLI:
 
     def test_standalone_toggle_and_practice(self, run, engine):
         code, out, _ = run("toggle", "-q", daemon_url=None)
-        assert code == 0 and "Run `speakcheck toggle` again" in out and engine.is_recording()
+        assert code == 0 and "Run `zephvox toggle` again" in out and engine.is_recording()
         code, out, _ = run("toggle", "-q", daemon_url=None)
         assert code == 0 and "Pronunciation (1)" in out and not engine.is_recording()
         code, _, err = run("practice", daemon_url=None)
@@ -507,7 +507,7 @@ class TestClientAndCLI:
 
         opened = []
         monkeypatch.setattr(uvicorn, "run", lambda *a, **k: pytest.fail("started a second server"))
-        monkeypatch.setattr("speakcheck.web.daemon.Daemon", lambda *a, **k: pytest.fail("created a second daemon"))
+        monkeypatch.setattr("zephvox.web.daemon.Daemon", lambda *a, **k: pytest.fail("created a second daemon"))
         monkeypatch.setattr(web_server, "daemon_at", lambda url: url == "http://127.0.0.1:8765")
         monkeypatch.setattr(web_server.webbrowser, "open", opened.append)
         web_client.write_daemon_file(engine.config.engine.data_dir, "http://127.0.0.1:8765")
@@ -518,7 +518,7 @@ class TestClientAndCLI:
     def test_serve_explains_a_port_taken_by_something_else(self, engine, monkeypatch):
         monkeypatch.setattr(web_server, "daemon_at", lambda url: False)
         monkeypatch.setattr(web_server, "port_free", lambda host, port: False)
-        with pytest.raises(SpeakcheckError, match="--port"):
+        with pytest.raises(ZephvoxError, match="--port"):
             web_server.serve(engine, port=9002)
 
     def test_port_free(self):
@@ -577,8 +577,8 @@ def test_reanalyze_session_in_place(api, daemon, wav_file):
 class TestProfilesApi:
     @pytest.fixture
     def setup(self, daemon, tmp_path, monkeypatch):
-        from speakcheck.engine.hardware import GPU, Hardware
-        from speakcheck.web import daemon as daemon_mod
+        from zephvox.engine.hardware import GPU, Hardware
+        from zephvox.web import daemon as daemon_mod
 
         path = tmp_path / "config.toml"
         path.write_text(f'[engine]\ndata_dir = "{tmp_path / "data"}"\n')
@@ -606,8 +606,8 @@ class TestProfilesApi:
         assert resp.status_code == 409 and "finish" in resp.json()["detail"]
 
     def test_cpu_install_needs_setup_for_a_gpu_profile(self, api, daemon, setup, monkeypatch, tmp_path):
-        from speakcheck.install.state import InstallState
-        from speakcheck.web import daemon as daemon_mod
+        from zephvox.install.state import InstallState
+        from zephvox.web import daemon as daemon_mod
 
         InstallState("cpu", ["models", "cpu"]).save(tmp_path)
         monkeypatch.setattr(daemon_mod, "project_root", lambda: tmp_path)
@@ -618,8 +618,8 @@ class TestProfilesApi:
 
 
 def test_profile_preview_changes_nothing_and_status_has_hardware(daemon, monkeypatch, tmp_path):
-    from speakcheck.engine.hardware import GPU, Hardware
-    from speakcheck.web import daemon as daemon_mod
+    from zephvox.engine.hardware import GPU, Hardware
+    from zephvox.web import daemon as daemon_mod
 
     hw = Hardware("linux", "x86_64", "Test CPU", 8, 32.0, 100.0, [GPU("amd", "RX 6800 XT", 16.0, "rocm")])
     daemon.__dict__["hardware"] = hw
@@ -658,7 +658,7 @@ class TestShortcutFeedback:
     def test_without_any_word_it_says_so(self, daemon):
         notes = self.setup(daemon)
         daemon.fire("practice_attempt")
-        assert notes == [("speakcheck", "Pick a word to practice first, in speakcheck's Practice page")]
+        assert notes == [("zephvox", "Pick a word to practice first, in zephvox's Practice page")]
         assert daemon.engine.recording_status() is None
 
     def test_analysis_shortcut_announces_the_report(self, daemon):
@@ -681,7 +681,7 @@ class TestShortcutFeedback:
 
 
 def test_notifier_commands(tmp_path, monkeypatch):
-    from speakcheck.web import notify
+    from zephvox.web import notify
 
     ran = []
     monkeypatch.setattr(notify.shutil, "which", lambda name: "/usr/bin/notify-send")
@@ -754,7 +754,7 @@ class TestConfigApi:
         assert FakeTriggers.instance.bindings["cancel"] == "Ctrl+Alt+Q"
 
     def test_old_settings_keys_fold_into_the_overlay(self, daemon):
-        from speakcheck.engine.config import load_user_settings, save_user_settings
+        from zephvox.engine.config import load_user_settings, save_user_settings
 
         data_dir = daemon.engine.config.engine.data_dir
         save_user_settings(data_dir, {"capture": {"provider": "fake-capture", "device": "mic-9"}, "practice_target": {"text": "x"}})
@@ -765,14 +765,14 @@ class TestConfigApi:
         assert daemon.notify.enabled is True
 
     def test_docs_come_from_the_example_config(self):
-        from speakcheck.engine.config import project_root
-        from speakcheck.engine.editable import docs_from_example
+        from zephvox.engine.config import project_root
+        from zephvox.engine.editable import docs_from_example
 
         docs = docs_from_example(project_root() / "config.example.toml")
         assert "GPU" in docs["provider.hf-whisper.device"] and "stricter" in docs["analyzer.pronunciation.threshold"]
 
     def test_model_download_reports_progress(self, api, daemon, monkeypatch, tmp_path):
-        from speakcheck.install import ollama
+        from zephvox.install import ollama
 
         fake = tmp_path / "ollama"
         fake.write_text("#!/bin/sh\nprintf 'pulling 10%%\\rpulling 60%%\\rpulling 100%%\\nsuccess\\n'\n")
@@ -805,7 +805,7 @@ class TestSharing:
         daemon.engine.config.server.port = port
         out = api.put("/api/sharing", json={"on": True}).json()
         assert out["running"] and out["urls"] == [f"http://127.0.0.1:{port}"] and out["enabled"]
-        assert httpx.get(f"http://127.0.0.1:{port}/v1/health").json()["service"] == "speakcheck"
+        assert httpx.get(f"http://127.0.0.1:{port}/v1/health").json()["service"] == "zephvox"
 
         added = api.post("/api/sharing/add_account", json={"name": "alice"}).json()
         code = added["invite"]["code"]

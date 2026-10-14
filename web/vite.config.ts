@@ -8,7 +8,7 @@ import { defineConfig } from "vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: { alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) } },
-  build: { outDir: "../src/speakcheck/web/static", emptyOutDir: true },
+  build: { outDir: "../src/zephvox/web/static", emptyOutDir: true },
   server: { proxy: { "/api": "http://127.0.0.1:8765" } },
   test: { environment: "jsdom", globals: true, setupFiles: ["src/test/setup.ts"], css: false },
 });

@@ -1,10 +1,10 @@
 import pytest
 
-from speakcheck.analyzers.base import AnalysisContext
-from speakcheck.analyzers.grammar.analyzer import GrammarAnalyzer
-from speakcheck.analyzers.grammar.prompt import RESPONSE_SCHEMA, user_prompt
-from speakcheck.engine.errors import LLMError
-from speakcheck.engine.models import Segment, Transcript, Word
+from zephvox.analyzers.base import AnalysisContext
+from zephvox.analyzers.grammar.analyzer import GrammarAnalyzer
+from zephvox.analyzers.grammar.prompt import RESPONSE_SCHEMA, user_prompt
+from zephvox.engine.errors import LLMError
+from zephvox.engine.models import Segment, Transcript, Word
 
 
 def _transcript(*sentences, verbatim="partial"):

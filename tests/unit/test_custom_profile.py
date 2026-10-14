@@ -2,10 +2,10 @@
 
 import pytest
 
-from speakcheck.engine import profiles
-from speakcheck.engine.config import load_config
-from speakcheck.engine.errors import SpeakcheckError
-from speakcheck.install import custom, state, wizard
+from zephvox.engine import profiles
+from zephvox.engine.config import load_config
+from zephvox.engine.errors import ZephvoxError
+from zephvox.install import custom, state, wizard
 from tests.unit.test_install import Recorder, install_root, machine, nvidia, setup_args  # noqa: F401  (fixture)
 
 
@@ -35,14 +35,14 @@ class TestCustomFile:
         assert profiles.get("custom", path).gpu
 
     def test_unknown_profile_lists_custom(self):
-        with pytest.raises(SpeakcheckError, match="custom"):
+        with pytest.raises(ZephvoxError, match="custom"):
             profiles.get("huge")
 
 
 class TestChoices:
     @pytest.mark.parametrize("preset", ["large", "standard", "cpu", "cpu-light"])
     def test_enter_throughout_keeps_the_preset(self, tmp_path, preset, monkeypatch):
-        monkeypatch.setenv("SPEAKCHECK_HOME", str(tmp_path / "data"))  # not the real settings.json
+        monkeypatch.setenv("ZEPHVOX_HOME", str(tmp_path / "data"))  # not the real settings.json
         hw = machine([nvidia(16)])
         start = wizard.preview_config(tmp_path / "config.toml", preset, tmp_path / "none.toml")
         console = wizard.Console(interactive=True, ask=lambda q: "", out=lambda text="": None)
@@ -103,7 +103,7 @@ class TestSetupWithCustom:
         console = wizard.Console(interactive=False, out=lambda text="": None)
         setup = wizard.Setup(setup_args(tmp_path, profile="custom"), console, runner=Recorder(),
                              detect=lambda r: machine([nvidia(12)]))  # fmt: skip
-        with pytest.raises(SpeakcheckError, match="custom-profile.toml"):
+        with pytest.raises(ZephvoxError, match="custom-profile.toml"):
             setup.run_all()
         profiles.save_custom(profiles.custom_path(install_root.path / "config.toml"),
                              {"provider": {"openai-compat": {"model": "qwen3:4b"}}})  # fmt: skip

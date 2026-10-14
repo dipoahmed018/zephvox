@@ -1,6 +1,6 @@
 # NVIDIA GPUs (needs the NVIDIA Container Toolkit). Use with compose.yml, see there.
 services:
-  speakcheck:
+  zephvox:
     deploy:
       resources:
         reservations:

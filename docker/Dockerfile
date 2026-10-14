@@ -1,6 +1,6 @@
-# speakcheck server image. Build from the repository root:
+# zephvox server image. Build from the repository root:
 #
-#   docker build -f docker/Dockerfile --build-arg ACCELERATOR=cpu -t speakcheck-server:cpu .
+#   docker build -f docker/Dockerfile --build-arg ACCELERATOR=cpu -t zephvox-server:cpu .
 #
 # ACCELERATOR: cpu (any machine), cuda (NVIDIA, needs the NVIDIA Container Toolkit) or rocm (AMD).
 # Easier: docker compose -f docker/compose.yml up -d  (see the README's "Docker" section).
@@ -11,7 +11,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /uvx /bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    SPEAKCHECK_HOME=/data \
+    ZEPHVOX_HOME=/data \
     HF_HOME=/models \
     PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
@@ -29,5 +29,5 @@ RUN uv sync --frozen --no-dev --extra models --extra "$ACCELERATOR" --extra web 
 
 VOLUME ["/data", "/models"]
 EXPOSE 8770
-ENTRYPOINT ["speakcheck"]
+ENTRYPOINT ["zephvox"]
 CMD ["server", "serve"]

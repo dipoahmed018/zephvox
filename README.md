@@ -1,4 +1,4 @@
-# speakcheck
+# zephvox
 
 Record yourself speaking English, then get a list of your **pronunciation** and **grammar** mistakes,
 each with the sentence it came from, what you said and what it should have been.
@@ -6,7 +6,7 @@ each with the sentence it came from, what you said and what it should have been.
 Everything runs offline, and every part is a plugin you can swap.
 
 ```
-$ speakcheck record
+$ zephvox record
 Speak now. Press Enter to stop…
 
 Pronunciation (1)
@@ -22,27 +22,27 @@ Grammar (1)
 
 ## Install
 
-One line installs everything into a single folder: `~/speakcheck`, or `%LOCALAPPDATA%\speakcheck` on Windows.
+One line installs everything into a single folder: `~/zephvox`, or `%LOCALAPPDATA%\zephvox` on Windows.
 
 ```sh
 # macOS / Linux
-curl -LsSf https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.sh | sh
 ```
 ```powershell
 # Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex"
 ```
 
-The script installs [uv](https://docs.astral.sh/uv/) if needed, downloads speakcheck and starts `speakcheck setup`,
+The script installs [uv](https://docs.astral.sh/uv/) if needed, downloads zephvox and starts `zephvox setup`,
 which installs the full app. To install only the small client instead (about 80 MB, no PyTorch or
-models: it records here and analyzes on a speakcheck server), pass the server's address and the invite
+models: it records here and analyzes on a zephvox server), pass the server's address and the invite
 code from its admin; see [Server mode](#server-mode):
 
 ```sh
-curl -LsSf https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.sh | sh -s -- --server-url https://speak.example.com --invite inv_...
+curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.sh | sh -s -- --server-url https://speak.example.com --invite inv_...
 ```
 ```powershell
-$env:SPEAKCHECK_SETUP_ARGS = "--server-url https://speak.example.com --invite inv_..."; irm https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.ps1 | iex
+$env:ZEPHVOX_SETUP_ARGS = "--server-url https://speak.example.com --invite inv_..."; irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex
 ```
 
 For the full app, setup:
@@ -53,10 +53,26 @@ For the full app, setup:
 4. **installs [Ollama](https://ollama.com)** for grammar, if you agree (winget, Homebrew, pacman or Ollama's script);
 5. **installs the matching PyTorch build** (NVIDIA → CUDA, AMD on Linux → ROCm, otherwise CPU; Macs use the Apple GPU);
 6. **downloads the models** with progress bars;
-7. **adds speakcheck to your app menu** and a `speakcheck` command to your terminal;
+7. **adds zephvox to your app menu** and a `zephvox` command to your terminal;
 8. **runs a test analysis** to check it all works.
 
 Nothing else needs a system install: the pronunciation dictionary and ffmpeg's decoders come with the Python packages.
+
+### Upgrading from speakcheck
+
+zephvox was called speakcheck until October 2026. An existing install carries over by itself:
+
+- your recordings, history and settings folder (`~/.local/share/speakcheck`, or the Windows/macOS
+  equivalent) is moved to `zephvox` the first time the new version starts, and so is the config folder;
+- `SPEAKCHECK_HOME` and `SPEAKCHECK_CONFIG` still work if set (`ZEPHVOX_HOME` and `ZEPHVOX_CONFIG` win);
+- the app-menu entry, the `speakcheck` terminal command and a background server service installed
+  under the old name are replaced when you run `zephvox desktop-entry`, `zephvox setup` or
+  `zephvox server install-service`;
+- on KDE, the old shortcut entry is removed. You may be asked once to allow the new app to register
+  its global shortcuts;
+- the command is now `zephvox`, webhooks are signed in a `Zephvox-Signature` header, and the
+  installer's variables are `ZEPHVOX_DIR`, `ZEPHVOX_VERSION` and so on. Clients can still connect to
+  servers that haven't been upgraded.
 
 ### Profiles
 
@@ -75,7 +91,7 @@ download sizes and starts from the recommended profile, so pressing Enter throug
 Your answers are saved in `custom-profile.toml` next to `config.toml`, and running setup again starts
 from them. Without a terminal, `--profile custom` reuses the saved file.
 
-Change profile any time in the page's **Settings**, or with `speakcheck setup` (which also installs
+Change profile any time in the page's **Settings**, or with `zephvox setup` (which also installs
 anything the new profile needs). A profile is only a starting point: anything you set in `config.toml`
 wins over it. These thresholds are first estimates; tell us if a profile doesn't suit your machine.
 
@@ -83,13 +99,13 @@ wins over it. These thresholds are first estimates; tell us if a profile doesn't
 
 | Command | What it does |
 |---|---|
-| `speakcheck serve --open` | start speakcheck (or use the app-menu entry) |
-| `speakcheck setup` | review the profile, repair the install; `--dry-run` only shows the plan |
-| `speakcheck update` | install the latest release, keeping your settings |
-| `speakcheck uninstall` | remove it (asks before deleting models or your recordings) |
+| `zephvox serve --open` | start zephvox (or use the app-menu entry) |
+| `zephvox setup` | review the profile, repair the install; `--dry-run` only shows the plan |
+| `zephvox update` | install the latest release, keeping your settings |
+| `zephvox uninstall` | remove it (asks before deleting models or your recordings) |
 
-Unattended install: `curl … | sh -s -- --profile cpu --yes` (Windows: set `SPEAKCHECK_SETUP_ARGS="--profile cpu --yes"`).
-`SPEAKCHECK_DIR` changes the folder.
+Unattended install: `curl … | sh -s -- --profile cpu --yes` (Windows: set `ZEPHVOX_SETUP_ARGS="--profile cpu --yes"`).
+`ZEPHVOX_DIR` changes the folder.
 
 **GPU notes.**
 - NVIDIA: the normal driver, 525 or newer. No CUDA toolkit is needed.
@@ -101,8 +117,8 @@ Unattended install: `curl … | sh -s -- --profile cpu --yes` (Windows: set `SPE
 ### From a git checkout (development)
 
 ```sh
-git clone https://github.com/dipoahmed018/speakcheck && cd speakcheck
-uv run speakcheck setup      # same wizard; keeps the dev tools, and `update` is `git pull`
+git clone https://github.com/dipoahmed018/zephvox && cd zephvox
+uv run zephvox setup      # same wizard; keeps the dev tools, and `update` is `git pull`
 ```
 
 Or by hand: `uv sync --extra models --extra cuda --extra desktop --extra web --extra voice`, with
@@ -111,7 +127,7 @@ Or by hand: `uv sync --extra models --extra cuda --extra desktop --extra web --e
 ## The web GUI
 
 ```sh
-speakcheck serve --open                  # http://127.0.0.1:8765  (in a git checkout: uv run speakcheck …)
+zephvox serve --open                  # http://127.0.0.1:8765  (in a git checkout: uv run zephvox …)
 ```
 
 `serve` starts a local daemon: it keeps the models loaded, owns the microphone, registers global
@@ -132,9 +148,9 @@ Shortcuts are a plugin kind too (`[providers] triggers`):
 
 | Driver | Where | Notes |
 |---|---|---|
-| `portal` | Linux (KDE Plasma, GNOME 48+, Hyprland; Wayland or X11) | Run `speakcheck desktop-entry` once first, so the desktop files the shortcuts under "speakcheck" (not your terminal). The desktop asks once; rebind in system settings. |
+| `portal` | Linux (KDE Plasma, GNOME 48+, Hyprland; Wayland or X11) | Run `zephvox desktop-entry` once first, so the desktop files the shortcuts under "zephvox" (not your terminal). The desktop asks once; rebind in system settings. |
 | `pynput` | Windows, macOS, Linux X11 | macOS asks for Accessibility permission |
-| any OS | — | Bind `speakcheck toggle` / `speakcheck practice` in your OS shortcut settings. Both talk to the running daemon. |
+| any OS | — | Bind `zephvox toggle` / `zephvox practice` in your OS shortcut settings. Both talk to the running daemon. |
 
 Change the suggested keys in `config.toml`:
 
@@ -146,26 +162,26 @@ cancel = "Ctrl+Shift+Alt+X"
 ```
 
 Frontend development: `cd web && npm install && npm run dev` (Vite proxies `/api` to the daemon).
-`npm run build` writes the production page into `src/speakcheck/web/static/`.
+`npm run build` writes the production page into `src/zephvox/web/static/`.
 
 ## Command line
 
 | Command | What it does |
 |---|---|
-| `speakcheck record` | record until you press Enter, then analyze |
-| `speakcheck start` / `speakcheck stop` | record in the background (e.g. bind these to hotkeys) |
-| `speakcheck analyze talk.mp3` | analyze any audio file |
-| `speakcheck report [SESSION]` | show a saved report again (`--format markdown\|json`, `-o file`) |
-| `speakcheck history` | your most frequent mistakes across sessions |
-| `speakcheck providers` | which drivers are available, and which is selected |
-| `speakcheck serve` | daemon + web GUI + global shortcuts |
-| `speakcheck desktop-entry` | add speakcheck to the app menu (Linux: also gives its shortcuts a proper name) |
-| `speakcheck toggle` / `speakcheck practice` | start/stop a recording or practice attempt (uses the daemon when it runs) |
+| `zephvox record` | record until you press Enter, then analyze |
+| `zephvox start` / `zephvox stop` | record in the background (e.g. bind these to hotkeys) |
+| `zephvox analyze talk.mp3` | analyze any audio file |
+| `zephvox report [SESSION]` | show a saved report again (`--format markdown\|json`, `-o file`) |
+| `zephvox history` | your most frequent mistakes across sessions |
+| `zephvox providers` | which drivers are available, and which is selected |
+| `zephvox serve` | daemon + web GUI + global shortcuts |
+| `zephvox desktop-entry` | add zephvox to the app menu (Linux: also gives its shortcuts a proper name) |
+| `zephvox toggle` / `zephvox practice` | start/stop a recording or practice attempt (uses the daemon when it runs) |
 
 When the daemon is running, `record`, `start`, `stop`, `toggle` and `practice` are forwarded to it.
 
 Useful flags: `--analyzers grammar` (only one ability), `--set stt=faster-whisper` (pick a driver),
-`--config path.toml`. Sessions (audio + `result.json`) live in your OS's app-data folder (Linux: `~/.local/share/speakcheck/sessions/`).
+`--config path.toml`. Sessions (audio + `result.json`) live in your OS's app-data folder (Linux: `~/.local/share/zephvox/sessions/`).
 
 ## Architecture
 
@@ -173,15 +189,15 @@ Useful flags: `--analyzers grammar` (only one ability), `--set stt=faster-whispe
 CLI ──► Engine ──► Planner ──► Providers (drivers) ──► Artifacts ──► Analyzers ──► Findings ──► Reporters
 ```
 
-- **Engine** (`src/speakcheck/engine/`): sessions, plugin registry, config, capability detection,
+- **Engine** (`src/zephvox/engine/`): sessions, plugin registry, config, capability detection,
   artifact planner, events. It knows nothing about pronunciation or grammar.
-- **Providers** (`src/speakcheck/providers/`): replaceable drivers, one contract per kind
+- **Providers** (`src/zephvox/providers/`): replaceable drivers, one contract per kind
   (`providers/base.py`).
 - **Artifacts** (`engine/artifacts.py`): intermediate data computed once, only if an enabled analyzer
   needs it. Running grammar alone never loads the phoneme model.
-- **Analyzers** (`src/speakcheck/analyzers/`): abilities. Each declares the artifacts and providers it
+- **Analyzers** (`src/zephvox/analyzers/`): abilities. Each declares the artifacts and providers it
   needs and returns `Finding`s in one shared format.
-- **Reporters** (`src/speakcheck/reporters/`): render findings as terminal text, Markdown or JSON.
+- **Reporters** (`src/zephvox/reporters/`): render findings as terminal text, Markdown or JSON.
 
 | Kind | Built-in drivers (default first) |
 |---|---|
@@ -196,14 +212,14 @@ CLI ──► Engine ──► Planner ──► Providers (drivers) ──► A
 All G2P and phoneme drivers convert into one canonical IPA phone set (`engine/phonemes.py`).
 That shared set is what makes mixing drivers safe.
 
-Expected pronunciations come from the CMU Pronouncing Dictionary (shipped with speakcheck). Short
+Expected pronunciations come from the CMU Pronouncing Dictionary (shipped with zephvox). Short
 acronyms are spelled out ("GPT") and compound words are split ("ChatGPT", "e-mail") before anything
 is guessed. Words no dictionary has (names, brands, new words) are predicted from their spelling by a
 small [DeepPhonemizer](https://github.com/as-ideas/DeepPhonemizer) model. For British English, use
 the `misaki` driver with `accent = "en-gb"`.
 
 Third-party drivers are Python packages that register an entry point (see `pyproject.toml`).
-[`plugins/speakcheck-espeak`](plugins/speakcheck-espeak) is one: it adds espeak-ng's rules as the
+[`plugins/zephvox-espeak`](plugins/zephvox-espeak) is one: it adds espeak-ng's rules as the
 `espeak` driver (`uv sync --extra espeak`). It is GPL-licensed, so it stays a separate package.
 
 ### Configuration
@@ -215,11 +231,11 @@ Two files in the project root, both git-ignored. Copy them from their templates:
 - **`.env`** (from `.env.example`): API keys and machine-specific environment variables (GPU overrides,
   model cache location). Variables already set in your shell win.
 
-Both are found from where the code lives, so they apply however speakcheck starts: from a terminal
-in any folder, from the app menu, or from a global shortcut. `--config` or `SPEAKCHECK_CONFIG` picks
-another file. If you install speakcheck as a package without the project folder, it uses your OS's
-config folder instead: `~/.config/speakcheck/`, `~/Library/Application Support/speakcheck/` or
-`%LOCALAPPDATA%\speakcheck\`. `speakcheck doctor` shows which files are in use.
+Both are found from where the code lives, so they apply however zephvox starts: from a terminal
+in any folder, from the app menu, or from a global shortcut. `--config` or `ZEPHVOX_CONFIG` picks
+another file. If you install zephvox as a package without the project folder, it uses your OS's
+config folder instead: `~/.config/zephvox/`, `~/Library/Application Support/zephvox/` or
+`%LOCALAPPDATA%\zephvox\`. `zephvox doctor` shows which files are in use.
 
 Each stage takes a preference list, and the first available driver wins:
 
@@ -250,12 +266,12 @@ threshold = 0.3                    # higher = stricter about what counts as a mi
 Subclass the contract for its kind and register an entry point in your own package:
 
 ```toml
-[project.entry-points."speakcheck.stt"]
-parakeet = "speakcheck_parakeet:ParakeetSTT"
+[project.entry-points."zephvox.stt"]
+parakeet = "zephvox_parakeet:ParakeetSTT"
 ```
 
 ```python
-from speakcheck.providers.base import STTProvider, Availability
+from zephvox.providers.base import STTProvider, Availability
 
 class ParakeetSTT(STTProvider):
     name = "parakeet"
@@ -273,21 +289,21 @@ Driver lifecycle, called by the engine:
 | `close()` | after the analysis | free GPU memory; stop only processes `prepare()` started |
 
 A new ability works the same way: subclass `analyzers.base.Analyzer`, set `needs` and `uses`, return
-`Finding`s, and register it under `speakcheck.analyzers`. Reports, history and session storage
+`Finding`s, and register it under `zephvox.analyzers`. Reports, history and session storage
 pick it up automatically.
 
 ## Server mode
 
-`speakcheck server serve` runs the engine as a service for many people: an API for whole recordings
+`zephvox server serve` runs the engine as a service for many people: an API for whole recordings
 (async jobs) and for practice (streamed while you speak). The admin manages it from the command line
 on the server:
 
 ```sh
-speakcheck server accounts add alice
-speakcheck server invite alice --url https://speak.example.com   # one-time code for one device
-speakcheck server limits set alice --max-jobs 3 --max-audio-minutes 60
-speakcheck server devices list | jobs list | webhook-secret alice
-speakcheck server serve --host 0.0.0.0                            # put HTTPS (Caddy, nginx) in front
+zephvox server accounts add alice
+zephvox server invite alice --url https://speak.example.com   # one-time code for one device
+zephvox server limits set alice --max-jobs 3 --max-audio-minutes 60
+zephvox server devices list | jobs list | webhook-secret alice
+zephvox server serve --host 0.0.0.0                            # put HTTPS (Caddy, nginx) in front
 ```
 
 Each device redeems an invite for its own key (`POST /v1/devices/redeem`) and sends it as
@@ -296,7 +312,7 @@ Each device redeems an invite for its own key (`POST /v1/devices/redeem`) and se
 **On a device**, install the client (or add `--server-url …` to the one-line installer above):
 
 ```sh
-speakcheck setup --role client --server-url https://speak.example.com --invite inv_...
+zephvox setup --role client --server-url https://speak.example.com --invite inv_...
 #   --server-header "CF-Access-Client-Id=${CF_ID}"   if a proxy in front of the server needs headers
 ```
 
@@ -321,7 +337,7 @@ deletes it everywhere. If the server can't be reached, recording still works: th
 | `GET /v1/account`, `/v1/devices` | the account's limits, webhook secret and devices; `POST /v1/devices/me/rotate` for a new key |
 | `GET/PUT/DELETE /v1/sessions/{id}` (+ `/audio`), `/v1/practice/attempts` | history sync (per account; storage limit applies) |
 
-Webhooks are signed: `Speakcheck-Signature: t=<unix>,v1=<HMAC-SHA256(webhook secret, "<t>.<body>")>`,
+Webhooks are signed: `Zephvox-Signature: t=<unix>,v1=<HMAC-SHA256(webhook secret, "<t>.<body>")>`,
 retried after 1, 5 and 30 minutes. Full API docs are served at `/v1/docs`. Settings and default
 limits are under `[server]` in `config.example.toml`.
 
@@ -332,19 +348,19 @@ reach it), add an account, and give its invite to the device. The server runs in
 uses the models it already has loaded. Accounts, devices, limits, recent jobs and webhook secrets
 are all managed in the same tab.
 
-**From a full install, without the app**: run `speakcheck server serve`, or
-`speakcheck server install-service` for a background service that starts with the computer (a systemd
+**From a full install, without the app**: run `zephvox server serve`, or
+`zephvox server install-service` for a background service that starts with the computer (a systemd
 user unit on Linux, a LaunchAgent on macOS, or a scheduled task on Windows); undo it with
-`speakcheck server remove-service`.
+`zephvox server remove-service`.
 
-**With Docker** (`docker/`): the speakcheck server plus Ollama.
+**With Docker** (`docker/`): the zephvox server plus Ollama.
 
 ```sh
 docker compose -f docker/compose.yml up -d                       # CPU
-SPEAKCHECK_ACCELERATOR=cuda docker compose -f docker/compose.yml -f docker/compose.cuda.yml up -d
-SPEAKCHECK_ACCELERATOR=rocm docker compose -f docker/compose.yml -f docker/compose.rocm.yml up -d
+ZEPHVOX_ACCELERATOR=cuda docker compose -f docker/compose.yml -f docker/compose.cuda.yml up -d
+ZEPHVOX_ACCELERATOR=rocm docker compose -f docker/compose.yml -f docker/compose.rocm.yml up -d
 docker compose -f docker/compose.yml exec ollama ollama pull qwen3:8b
-docker compose -f docker/compose.yml exec speakcheck speakcheck server accounts add me
+docker compose -f docker/compose.yml exec zephvox zephvox server accounts add me
 ```
 
 Models download into a volume on first use. Settings are in `docker/config.toml`; mount your own over
@@ -397,7 +413,7 @@ uv run pytest -m llm                      # live Ollama
 
 ## License
 
-speakcheck is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
+zephvox is free software under the [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
 You can use and change it freely. If you share it, or run a changed version as a service for others,
 you must publish your source under the same license.
 

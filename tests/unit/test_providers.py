@@ -8,16 +8,16 @@ import httpx
 import pytest
 import respx
 
-from speakcheck.engine.capabilities import SystemCapabilities
-from speakcheck.engine.errors import LLMError, RecordingError
-from speakcheck.engine.models import Pronunciation
-from speakcheck.providers.base import Availability, G2PProvider, Services
-from speakcheck.providers.capture import pipewire
-from speakcheck.providers.capture.pipewire import PipeWireCapture
-from speakcheck.providers.g2p.chain import ChainG2P
-from speakcheck.providers.g2p.cmudict import CMUDictG2P
-from speakcheck.providers.g2p.misaki import MisakiG2P, misaki_to_phones
-from speakcheck.providers.llm.openai_compat import OpenAICompatLLM, parse_json_reply
+from zephvox.engine.capabilities import SystemCapabilities
+from zephvox.engine.errors import LLMError, RecordingError
+from zephvox.engine.models import Pronunciation
+from zephvox.providers.base import Availability, G2PProvider, Services
+from zephvox.providers.capture import pipewire
+from zephvox.providers.capture.pipewire import PipeWireCapture
+from zephvox.providers.g2p.chain import ChainG2P
+from zephvox.providers.g2p.cmudict import CMUDictG2P
+from zephvox.providers.g2p.misaki import MisakiG2P, misaki_to_phones
+from zephvox.providers.llm.openai_compat import OpenAICompatLLM, parse_json_reply
 
 BASE = "http://llm.test/v1"
 
@@ -348,7 +348,7 @@ class TestAutostart:
     def test_prepare_starts_server_and_close_stops_it(self, monkeypatch):
         server = FakeServer()
         monkeypatch.setattr(subprocess, "Popen", server)
-        monkeypatch.setattr("speakcheck.providers.llm.openai_compat.time.sleep", lambda s: None)
+        monkeypatch.setattr("zephvox.providers.llm.openai_compat.time.sleep", lambda s: None)
         respx.get(f"{LOCAL}/models").mock(side_effect=[
             httpx.ConnectError("not yet"), httpx.ConnectError("starting"),
             httpx.Response(200, json={"data": [{"id": "qwen3:8b"}]}),
@@ -372,7 +372,7 @@ class TestAutostart:
     @respx.mock
     def test_prepare_failures(self, monkeypatch):
         respx.get(f"{LOCAL}/models").mock(side_effect=httpx.ConnectError("refused"))
-        monkeypatch.setattr("speakcheck.providers.llm.openai_compat.time.sleep", lambda s: None)
+        monkeypatch.setattr("zephvox.providers.llm.openai_compat.time.sleep", lambda s: None)
         with pytest.raises(LLMError, match="cannot reach"):
             self.llm(autostart=False).prepare()
 

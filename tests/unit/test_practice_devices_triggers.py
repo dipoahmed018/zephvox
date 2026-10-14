@@ -9,24 +9,24 @@ import numpy as np
 import pytest
 from dbus_fast import MessageType, Variant
 
-from speakcheck.analyzers.base import AnalysisContext
-from speakcheck.analyzers.pronunciation.hints import tip
-from speakcheck.analyzers.pronunciation.align import align
-from speakcheck.analyzers.pronunciation.practice import PracticeAnalyzer, phone_status
-from speakcheck.engine import audio
-from speakcheck.engine.capabilities import SystemCapabilities
-from speakcheck.engine.config import Config, apply_user_settings, load_config, load_user_settings, save_user_settings
-from speakcheck.engine.errors import ConfigError, RecordingError, SpeakcheckError
-from speakcheck.engine.models import PhoneSeq, Pronunciation
-from speakcheck.engine.practice import PracticeAttempt, PracticeStore
-from speakcheck.engine.text import transcript_from_text
-from speakcheck.providers.base import Services
-from speakcheck.providers.capture.pipewire import PipeWireCapture, parse_pw_dump
-from speakcheck.providers.capture.sounddevice import SoundDeviceCapture
-from speakcheck.providers.triggers import portal, pynput
-from speakcheck.providers.triggers.portal import IFACE, PortalSession, PortalTriggers, to_portal_trigger
-from speakcheck.providers.triggers.pynput import PynputTriggers, to_pynput_hotkey
-from speakcheck.providers.tts.espeak import EspeakTTS
+from zephvox.analyzers.base import AnalysisContext
+from zephvox.analyzers.pronunciation.hints import tip
+from zephvox.analyzers.pronunciation.align import align
+from zephvox.analyzers.pronunciation.practice import PracticeAnalyzer, phone_status
+from zephvox.engine import audio
+from zephvox.engine.capabilities import SystemCapabilities
+from zephvox.engine.config import Config, apply_user_settings, load_config, load_user_settings, save_user_settings
+from zephvox.engine.errors import ConfigError, RecordingError, ZephvoxError
+from zephvox.engine.models import PhoneSeq, Pronunciation
+from zephvox.engine.practice import PracticeAttempt, PracticeStore
+from zephvox.engine.text import transcript_from_text
+from zephvox.providers.base import Services
+from zephvox.providers.capture.pipewire import PipeWireCapture, parse_pw_dump
+from zephvox.providers.capture.sounddevice import SoundDeviceCapture
+from zephvox.providers.triggers import portal, pynput
+from zephvox.providers.triggers.portal import IFACE, PortalSession, PortalTriggers, to_portal_trigger
+from zephvox.providers.triggers.pynput import PynputTriggers, to_pynput_hotkey
+from zephvox.providers.tts.espeak import EspeakTTS
 
 THINK = {"think": Pronunciation("think", [["θ", "ɪ", "ŋ", "k"]])}
 
@@ -256,7 +256,7 @@ class TestEspeakTTS:
 
     def test_failure_and_unavailable(self, monkeypatch):
         monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(returncode=1, stdout=b"", stderr=b"bad"))
-        with pytest.raises(SpeakcheckError, match="espeak-ng failed: bad"):
+        with pytest.raises(ZephvoxError, match="espeak-ng failed: bad"):
             EspeakTTS().synthesize("x")
         assert not EspeakTTS(services=Services(SystemCapabilities(binaries={"espeak-ng": False}))).check_available().ok
 
@@ -314,7 +314,7 @@ class FakeBus:
         if msg.member in ("CreateSession", "BindShortcuts"):
             options = msg.body[0] if msg.member == "CreateSession" else msg.body[3]
             path = f"/org/freedesktop/portal/desktop/request/1_42/{options['handle_token'].value}"
-            results = {"session_handle": Variant("o", "/org/freedesktop/portal/desktop/session/1_42/speakcheck")}
+            results = {"session_handle": Variant("o", "/org/freedesktop/portal/desktop/session/1_42/zephvox")}
             signal = SimpleNamespace(member="Response", path=path, interface="org.freedesktop.portal.Request",
                                      body=[self.code, results])  # fmt: skip
             asyncio.get_running_loop().call_soon(self.handler, signal)
@@ -325,7 +325,7 @@ class TestPortal:
     def test_setup_binds_and_dispatches_activations(self):
         bus, fired = FakeBus(), []
         session = PortalSession(bus, fired.append, response_timeout=2)
-        asyncio.run(session.setup({"toggle_recording": "Ctrl+Alt+R"}, "io.github.speakcheck"))
+        asyncio.run(session.setup({"toggle_recording": "Ctrl+Alt+R"}, "io.github.zephvox"))
         members = [m.member for m in bus.calls]
         assert members == ["AddMatch", "AddMatch", "Register", "CreateSession", "BindShortcuts"]
         shortcut = bus.calls[-1].body[1][0]
@@ -345,13 +345,21 @@ class TestPortal:
         session = PortalSession(bus, lambda a: None, response_timeout=2)
 
         async def run():
-            await session.setup({"cancel": "Ctrl+Alt+X"}, "io.github.speakcheck")
-            await session.watch({"cancel": "Ctrl+Alt+X"}, "io.github.speakcheck", interval=0, on_rebind=lambda: rebinds.append(1))
+            await session.setup({"cancel": "Ctrl+Alt+X"}, "io.github.zephvox")
+            await session.watch({"cancel": "Ctrl+Alt+X"}, "io.github.zephvox", interval=0, on_rebind=lambda: rebinds.append(1))
 
         asyncio.run(run())  # returns once isActive stops answering, like on a desktop that isn't KDE
         members = [m.member for m in bus.calls]
         assert members.count("CreateSession") == 2 and "Close" in members and rebinds == [1]
-        assert next(m for m in bus.calls if m.member == "isActive").path == "/component/io_github_speakcheck"
+        assert next(m for m in bus.calls if m.member == "isActive").path == "/component/io_github_zephvox"
+
+    def test_old_kde_component_is_dropped(self):
+        bus = FakeBus()
+        session = PortalSession(bus, lambda a: None, response_timeout=2)
+        asyncio.run(session.drop_kde_component("io.github.speakcheck", ["toggle_recording", "cancel"]))
+        calls = [(m.member, m.body) for m in bus.calls]
+        assert calls == [("unregister", ["io.github.speakcheck", "toggle_recording"]),
+                         ("unregister", ["io.github.speakcheck", "cancel"])]  # fmt: skip
 
     def test_qt_key_codes(self):
         assert portal.to_qt_key("Ctrl+Shift+Alt+X") == 234881112  # what KDE stored on a real desktop
@@ -365,12 +373,12 @@ class TestPortal:
         session = PortalSession(bus, lambda a: None, response_timeout=2)
 
         async def run():
-            assert await session.set_kde_bindings("io.github.speakcheck", {"cancel": "Ctrl+Shift+Alt+Q"})
-            return await session.kde_bindings("io.github.speakcheck", ["cancel", "toggle_recording"])
+            assert await session.set_kde_bindings("io.github.zephvox", {"cancel": "Ctrl+Shift+Alt+Q"})
+            return await session.kde_bindings("io.github.zephvox", ["cancel", "toggle_recording"])
 
         assert asyncio.run(run()) == {"cancel": "Ctrl+Shift+Alt+Q"}
         call = next(m for m in bus.calls if m.member == "setForeignShortcut")
-        assert call.body[0] == ["io.github.speakcheck", "cancel", "speakcheck", "speakcheck: cancel recording"]
+        assert call.body[0] == ["io.github.zephvox", "cancel", "zephvox", "zephvox: cancel recording"]
         assert asyncio.run(PortalSession(FakeBus(), lambda a: None).kde_bindings("app", ["cancel"])) is None  # not KDE
 
     def test_watch_returns_at_once_off_kde(self):
@@ -381,7 +389,7 @@ class TestPortal:
 
     def test_declined_dialog_raises(self):
         session = PortalSession(FakeBus(response_code=1, register_fails=False), lambda a: None, response_timeout=2)
-        with pytest.raises(SpeakcheckError, match="declined"):
+        with pytest.raises(ZephvoxError, match="declined"):
             asyncio.run(session.setup({"cancel": "Ctrl+Alt+X"}, "app"))
 
     def test_availability(self, monkeypatch):

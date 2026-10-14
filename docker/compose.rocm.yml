@@ -1,7 +1,7 @@
 # AMD GPUs with ROCm (Linux). Use with compose.yml, see there.
 # Consumer cards may need HSA_OVERRIDE_GFX_VERSION, e.g. 10.3.0 for an RX 6000.
 services:
-  speakcheck:
+  zephvox:
     devices:
       - /dev/kfd
       - /dev/dri

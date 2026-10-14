@@ -10,19 +10,19 @@ import respx
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from speakcheck import cli
-from speakcheck.engine import audio
-from speakcheck.engine.config import ServerSettings
-from speakcheck.engine.errors import SpeakcheckError
-from speakcheck.server import cli as server_cli
-from speakcheck.server.app import create_server_app
-from speakcheck.server.db import Job
-from speakcheck.server.keys import hash_secret, verify
-from speakcheck.server.service import Server
-from speakcheck.server.webhooks import RETRY_DELAYS_S, SIGNATURE_HEADER, WebhookError, check_url
+from zephvox import cli
+from zephvox.engine import audio
+from zephvox.engine.config import ServerSettings
+from zephvox.engine.errors import ZephvoxError
+from zephvox.server import cli as server_cli
+from zephvox.server.app import create_server_app
+from zephvox.server.db import Job
+from zephvox.server.keys import hash_secret, verify
+from zephvox.server.service import Server
+from zephvox.server.webhooks import RETRY_DELAYS_S, SIGNATURE_HEADER, WebhookError, check_url
 from tests.unit.test_web import FakeTTS
 
-HOOK = "https://hooks.example.com/speakcheck"
+HOOK = "https://hooks.example.com/zephvox"
 
 
 class Clock:
@@ -277,7 +277,7 @@ class TestPractice:
 
     def test_health(self, api):
         health = api.get("/v1/health").json()
-        assert health["service"] == "speakcheck" and health["practice"] and health["tts"]
+        assert health["service"] == "zephvox" and health["practice"] and health["tts"]
         assert "practice" not in health["analyzers"] and health["source"].startswith("https://github.com/")
 
 
@@ -325,40 +325,40 @@ class TestAdminCli:
 
     def test_bad_input(self, server):
         server.db.add_account("x", 0)
-        with pytest.raises(SpeakcheckError, match="durations look like"):
+        with pytest.raises(ZephvoxError, match="durations look like"):
             self.run(server, ["invite", "x", "--expires", "soon"])
-        with pytest.raises(SpeakcheckError, match="no account"):
+        with pytest.raises(ZephvoxError, match="no account"):
             self.run(server, ["invite", "nobody"])
-        with pytest.raises(SpeakcheckError, match="nothing to change"):
+        with pytest.raises(ZephvoxError, match="nothing to change"):
             self.run(server, ["limits", "set", "x"])
 
 
 class TestOsService:
     def test_systemd(self, tmp_path):
-        from speakcheck.server import os_service
+        from zephvox.server import os_service
 
         runner = []
         record = lambda cmd, **kw: runner.append(cmd) or type("P", (), {"stdout": "Linger=no", "returncode": 0})()  # noqa: E731
         cmd = os_service.command("/py", tmp_path / "config.toml", "0.0.0.0", 9000)
         where = os_service.install(cmd, tmp_path, record, platform="linux", home=tmp_path)
-        unit = (tmp_path / ".config/systemd/user/speakcheck-server.service").read_text()
-        assert "ExecStart=/py -m speakcheck.cli server serve --config" in unit and "--port 9000" in unit
-        assert ["systemctl", "--user", "enable", "--now", "speakcheck-server"] in runner
+        unit = (tmp_path / ".config/systemd/user/zephvox-server.service").read_text()
+        assert "ExecStart=/py -m zephvox.cli server serve --config" in unit and "--port 9000" in unit
+        assert ["systemctl", "--user", "enable", "--now", "zephvox-server"] in runner
         assert "enable-linger" in where
         assert os_service.remove(record, platform="linux", home=tmp_path)
         assert not os_service.remove(record, platform="linux", home=tmp_path)
 
     def test_macos_and_windows(self, tmp_path):
-        from speakcheck.server import os_service
+        from zephvox.server import os_service
 
         runner = []
         record = lambda cmd, **kw: runner.append(cmd) or type("P", (), {"stdout": "", "returncode": 0})()  # noqa: E731
         cmd = os_service.command("/Applications/My Python/py", None, None, None)
         os_service.install(cmd, tmp_path, record, platform="darwin", home=tmp_path)
-        plist = (tmp_path / "Library/LaunchAgents/com.speakcheck.server.plist").read_text()
+        plist = (tmp_path / "Library/LaunchAgents/com.zephvox.server.plist").read_text()
         assert "<string>/Applications/My Python/py</string>" in plist and "<key>KeepAlive</key>" in plist
-        os_service.install(["C:\\Program Files\\py.exe", "-m", "speakcheck.cli"], tmp_path, record, platform="win32")
+        os_service.install(["C:\\Program Files\\py.exe", "-m", "zephvox.cli"], tmp_path, record, platform="win32")
         task = runner[-2]
-        assert task[:3] == ["schtasks", "/Create", "/TN"] and '"C:\\Program Files\\py.exe" -m speakcheck.cli' in task
+        assert task[:3] == ["schtasks", "/Create", "/TN"] and '"C:\\Program Files\\py.exe" -m zephvox.cli' in task
         with pytest.raises(OSError):
             os_service.install(cmd, tmp_path, record, platform="plan9")

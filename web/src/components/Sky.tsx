@@ -161,7 +161,7 @@ export function Sky({ route, variant, className }: { route: Route; variant: "pan
       <WindCanvas mode={s.mode} level={rec?.level ?? 0} gates={gates} />
 
       <div className="relative flex items-center justify-between px-7 pt-6">
-        <span className="font-display text-2xl font-light italic">speakcheck</span>
+        <span className="font-display text-2xl font-light italic">zephvox</span>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon" aria-label={dark ? "Use light theme" : "Use dark theme"} onClick={() => setTheme(dark ? "light" : "dark")}>

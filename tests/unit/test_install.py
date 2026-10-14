@@ -11,20 +11,20 @@ from types import SimpleNamespace
 
 import pytest
 
-from speakcheck import cli
-from speakcheck.engine import config as config_mod
-from speakcheck.engine import hardware, profiles
-from speakcheck.engine.config import (
+from zephvox import cli
+from zephvox.engine import config as config_mod
+from zephvox.engine import hardware, profiles
+from zephvox.engine.config import (
     choose_profile,
     load_config,
     load_user_settings,
     save_user_settings,
     write_profile,
 )
-from speakcheck.engine.errors import ConfigError
-from speakcheck.engine.hardware import GPU, Hardware
-from speakcheck.install import download, ollama, state, update, wizard
-from speakcheck.providers.base import Download
+from zephvox.engine.errors import ConfigError
+from zephvox.engine.hardware import GPU, Hardware
+from zephvox.install import download, ollama, state, update, wizard
+from zephvox.providers.base import Download
 
 ROCMINFO = """
 *******
@@ -322,7 +322,7 @@ class TestSetup:
         assert (saved.accelerator, saved.version) == ("cuda", "v1.2")
         (sync,) = runner.ran("uv sync")
         assert sync[sync.index("--extra") + 3] == "cuda"
-        assert runner.ran("speakcheck.install.download") and runner.ran("selftest.wav")
+        assert runner.ran("zephvox.install.download") and runner.ran("selftest.wav")
         assert install_root.pulled == ["qwen3:8b"]
 
     def test_a_server_address_means_client(self, tmp_path, install_root):
@@ -353,7 +353,7 @@ class TestSetup:
         runner = Recorder()
         assert run_setup(tmp_path, runner, machine([nvidia(12)]), profile="cpu", no_download=True) == 0
         assert state.InstallState.load(install_root.path).accelerator == "cpu"
-        assert not runner.ran("speakcheck.install.download") and install_root.pulled == []
+        assert not runner.ran("zephvox.install.download") and install_root.pulled == []
 
     def test_existing_profile_is_the_default_on_a_rerun(self, tmp_path, install_root):
         (install_root.path / "config.toml").write_text(f'profile = "small"\n[engine]\ndata_dir = "{tmp_path / "data"}"\n')
@@ -398,7 +398,7 @@ def source_archive(files: dict[str, str]) -> bytes:
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name, text in files.items():
             data = text.encode()
-            info = tarfile.TarInfo(f"speakcheck-1.1/{name}")
+            info = tarfile.TarInfo(f"zephvox-1.1/{name}")
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
     return buf.getvalue()
@@ -407,7 +407,7 @@ def source_archive(files: dict[str, str]) -> bytes:
 class TestUpdate:
     def test_latest_version(self):
         tag = update.latest_version(lambda url: json.dumps({"tag_name": "v1.1"}).encode())
-        assert tag == ("v1.1", "https://github.com/dipoahmed018/speakcheck/archive/refs/tags/v1.1.tar.gz")
+        assert tag == ("v1.1", "https://github.com/dipoahmed018/zephvox/archive/refs/tags/v1.1.tar.gz")
 
         def offline(url):
             raise OSError("no network")
@@ -447,8 +447,8 @@ class TestUpdate:
         (tmp_path / ".git").mkdir()
         removed = []
         monkeypatch.setattr(update, "project_root", lambda: tmp_path)
-        monkeypatch.setattr("speakcheck.desktop.remove_launcher", lambda: removed.append("launcher"))
-        monkeypatch.setattr("speakcheck.desktop.remove_command", lambda: removed.append("command"))
+        monkeypatch.setattr("zephvox.desktop.remove_launcher", lambda: removed.append("launcher"))
+        monkeypatch.setattr("zephvox.desktop.remove_command", lambda: removed.append("command"))
         data = tmp_path / "data"
         data.mkdir()
         cfg = tmp_path / "c.toml"

@@ -1,8 +1,8 @@
-from speakcheck.analyzers.base import AnalysisContext
-from speakcheck.analyzers.pronunciation.align import align
-from speakcheck.analyzers.pronunciation.analyzer import PronunciationAnalyzer
-from speakcheck.analyzers.pronunciation.hints import category, describe, errors_of, explain
-from speakcheck.engine.models import PhoneSeq, Pronunciation, Segment, Transcript, Word
+from zephvox.analyzers.base import AnalysisContext
+from zephvox.analyzers.pronunciation.align import align
+from zephvox.analyzers.pronunciation.analyzer import PronunciationAnalyzer
+from zephvox.analyzers.pronunciation.hints import category, describe, errors_of, explain
+from zephvox.engine.models import PhoneSeq, Pronunciation, Segment, Transcript, Word
 
 
 class TestAlign:

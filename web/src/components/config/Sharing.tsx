@@ -81,7 +81,7 @@ function InviteDialog({ invite, url, onClose }: { invite: SharingInfo["invite"];
         <div className="grid gap-3 text-sm">
           <CopyLine text={invite.code} label="Copy the invite code" />
           <p className="m-0 text-muted-foreground">On the other device: Settings → Where analysis runs → A server, with this address and code. Or install it with:</p>
-          <CopyLine text={`speakcheck setup --server-url ${url} --invite ${invite.code}`} label="Copy the setup command" />
+          <CopyLine text={`zephvox setup --server-url ${url} --invite ${invite.code}`} label="Copy the setup command" />
         </div>
         <DialogFooter>
           <Button onClick={onClose}>Done</Button>
@@ -255,7 +255,7 @@ export function Sharing() {
         <SettingRow
           label="Share"
           htmlFor="share-switch"
-          description={info.running ? "Running. It starts again whenever speakcheck does." : info.enabled ? "Turned on, but not running right now." : "Off."}
+          description={info.running ? "Running. It starts again whenever zephvox does." : info.enabled ? "Turned on, but not running right now." : "Off."}
           aside={info.running ? <Badge variant="success">sharing</Badge> : null}
         >
           <Switch id="share-switch" checked={info.running} disabled={busy || info.remote} onCheckedChange={toggle} />
@@ -368,7 +368,7 @@ export function Sharing() {
           </CollapsibleTrigger>
           <CollapsibleContent>
             <p className="mt-2 mb-3 text-sm text-muted-foreground">
-              A background service that starts with the computer, even when speakcheck isn't open (a systemd user unit on Linux, a LaunchAgent on
+              A background service that starts with the computer, even when zephvox isn't open (a systemd user unit on Linux, a LaunchAgent on
               macOS, a scheduled task on Windows). It loads its own copy of the models and uses the same port, so turn Share off first.
             </p>
             <div className="flex flex-wrap items-center gap-2">

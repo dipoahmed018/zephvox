@@ -1,17 +1,22 @@
 #!/bin/sh
-# speakcheck installer for macOS and Linux. Also updates an existing install.
+# zephvox installer for macOS and Linux. Also updates an existing install.
 #
-#   curl -LsSf https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.sh | sh
+#   curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.sh | sh
 #
-# Options go after `sh -s --`, e.g. `... | sh -s -- --profile cpu --yes` (see `speakcheck setup --help`).
-# Environment: SPEAKCHECK_DIR (default ~/speakcheck), SPEAKCHECK_VERSION (a release tag; default latest).
+# Options go after `sh -s --`, e.g. `... | sh -s -- --profile cpu --yes` (see `zephvox setup --help`).
+# Environment: ZEPHVOX_DIR (default ~/zephvox), ZEPHVOX_VERSION (a release tag; default latest).
+# The SPEAKCHECK_* names from before the rename still work for DIR.
 #
-# What it does: installs uv if needed, downloads speakcheck into one folder, installs the small core,
-# then hands over to `speakcheck setup`, which detects your hardware and installs the rest.
+# What it does: installs uv if needed, downloads zephvox into one folder, installs the small core,
+# then hands over to `zephvox setup`, which detects your hardware and installs the rest.
 set -eu
 
-REPO="dipoahmed018/speakcheck"
-DIR="${SPEAKCHECK_DIR:-$HOME/speakcheck}"
+REPO="dipoahmed018/zephvox"
+# An install made under the app's old name (~/speakcheck) is updated in place, not duplicated.
+DIR="${ZEPHVOX_DIR:-${SPEAKCHECK_DIR:-}}"
+if [ -z "$DIR" ]; then
+    if [ -d "$HOME/speakcheck" ] && [ ! -d "$HOME/zephvox" ]; then DIR="$HOME/speakcheck"; else DIR="$HOME/zephvox"; fi
+fi
 
 say() { printf '%s\n' "$*"; }
 fail() { say "error: $*" >&2; exit 1; }
@@ -32,24 +37,24 @@ else
     [ -x "$UV" ] || fail "uv installation failed"
 fi
 
-# 2. speakcheck itself: the latest release, or main while there is none
-#    (SPEAKCHECK_SOURCE: another source archive, e.g. file:///path/to/speakcheck.tar.gz, for testing)
-VERSION="${SPEAKCHECK_VERSION:-}"
-if [ -n "${SPEAKCHECK_SOURCE:-}" ]; then
+# 2. zephvox itself: the latest release, or main while there is none
+#    (ZEPHVOX_SOURCE: another source archive, e.g. file:///path/to/zephvox.tar.gz, for testing)
+VERSION="${ZEPHVOX_VERSION:-}"
+if [ -n "${ZEPHVOX_SOURCE:-}" ]; then
     VERSION="${VERSION:-local}"
 elif [ -z "$VERSION" ]; then
     VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null |
         sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1) || true
 fi
-if [ -n "${SPEAKCHECK_SOURCE:-}" ]; then
-    URL="$SPEAKCHECK_SOURCE"
+if [ -n "${ZEPHVOX_SOURCE:-}" ]; then
+    URL="$ZEPHVOX_SOURCE"
 elif [ -n "$VERSION" ]; then
     URL="https://github.com/$REPO/archive/refs/tags/$VERSION.tar.gz"
 else
     VERSION=main
     URL="https://github.com/$REPO/archive/refs/heads/main.tar.gz"
 fi
-say "Downloading speakcheck $VERSION into $DIR…"
+say "Downloading zephvox $VERSION into $DIR…"
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 curl -fsSL "$URL" | tar -xz -C "$TMP"
@@ -71,6 +76,6 @@ cd "$DIR"
 say "Starting setup…"
 # Under `curl | sh` the script itself is on stdin: ask the questions on the terminal instead.
 if (exec </dev/tty) 2>/dev/null; then
-    exec "$UV" run --no-sync python -m speakcheck.cli setup --installed-version "$VERSION" "$@" </dev/tty
+    exec "$UV" run --no-sync python -m zephvox.cli setup --installed-version "$VERSION" "$@" </dev/tty
 fi
-exec "$UV" run --no-sync python -m speakcheck.cli setup --installed-version "$VERSION" --yes "$@"
+exec "$UV" run --no-sync python -m zephvox.cli setup --installed-version "$VERSION" --yes "$@"

@@ -38,7 +38,7 @@ function Log({ lines }: { lines: string[] }) {
   );
 }
 
-/** Where analysis runs: this computer, or a speakcheck server (connect, sync, keys). */
+/** Where analysis runs: this computer, or a zephvox server (connect, sync, keys). */
 export function EngineSection() {
   const { state } = useEngine();
   const run = useAction();
@@ -96,7 +96,7 @@ export function EngineSection() {
     <SettingsSection
       id="engine"
       title="Where analysis runs"
-      description="Recording always happens here. The speech models can run on this computer or on a speakcheck server."
+      description="Recording always happens here. The speech models can run on this computer or on a zephvox server."
     >
       <SettingRow label="Analysis runs on" aside={<SavedMark show={saved.is("mode")} />}>
         <ToggleGroup
@@ -140,7 +140,7 @@ export function EngineSection() {
               {install.ok === false && (
                 <>
                   <p className="m-0 text-sm text-alert-ink">
-                    The install failed. The last lines are below; you can also run <code>speakcheck setup --role full</code> in a terminal.
+                    The install failed. The last lines are below; you can also run <code>zephvox setup --role full</code> in a terminal.
                   </p>
                   <Log lines={install.log} />
                 </>
@@ -163,7 +163,7 @@ export function EngineSection() {
                 {info.server && (
                   <>
                     <br />
-                    speakcheck {info.server.version} · checks {info.server.analyzers.join(" and ") || "nothing right now"} · models chosen by the
+                    zephvox {info.server.version} · checks {info.server.analyzers.join(" and ") || "nothing right now"} · models chosen by the
                     server's admin
                   </>
                 )}

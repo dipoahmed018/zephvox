@@ -3,13 +3,14 @@ import { useEffect, useSyncExternalStore } from "react";
 
 export type ThemeChoice = "light" | "dark" | "system";
 
-const KEY = "speakcheck.theme";
+const KEY = "zephvox.theme";
+const LEGACY_KEY = "speakcheck.theme"; // the app's name before zephvox
 const listeners = new Set<() => void>();
 const media = typeof window !== "undefined" ? window.matchMedia?.("(prefers-color-scheme: dark)") : undefined;
 
 function read(): ThemeChoice {
   try {
-    const v = localStorage.getItem(KEY);
+    const v = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY);
     return v === "dark" || v === "system" ? v : "light";
   } catch {
     return "light";

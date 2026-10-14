@@ -2,13 +2,13 @@ import json
 
 import pytest
 
-from speakcheck import cli
-from speakcheck.engine.engine import Engine
-from speakcheck.engine.models import AnalysisResult, Finding
-from speakcheck.reporters.base import fmt_time, group
-from speakcheck.reporters.json import JsonReporter
-from speakcheck.reporters.markdown import MarkdownReporter
-from speakcheck.reporters.terminal import TerminalReporter
+from zephvox import cli
+from zephvox.engine.engine import Engine
+from zephvox.engine.models import AnalysisResult, Finding
+from zephvox.reporters.base import fmt_time, group
+from zephvox.reporters.json import JsonReporter
+from zephvox.reporters.markdown import MarkdownReporter
+from zephvox.reporters.terminal import TerminalReporter
 
 
 @pytest.fixture
@@ -89,7 +89,7 @@ def test_cli_record_and_report(run_cli):
 
 def test_cli_start_stop(run_cli):
     code, out, err = run_cli("start")
-    assert code == 0 and "Run `speakcheck stop`" in out and "● recording" in err
+    assert code == 0 and "Run `zephvox stop`" in out and "● recording" in err
     code, out, _ = run_cli("stop", "-q")
     assert code == 0 and "Pronunciation (1)" in out
 
@@ -141,8 +141,8 @@ def test_cli_builds_engine_from_config(tmp_path, monkeypatch, capsys):
 def test_cli_desktop_entry(run_cli, tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
     code, out, _ = run_cli("desktop-entry", "-q")
-    entry = tmp_path / "applications" / "io.github.speakcheck.desktop"
+    entry = tmp_path / "applications" / "io.github.zephvox.desktop"
     assert code == 0 and str(entry) in out
     text = entry.read_text()
-    assert "Exec=" in text and "-m speakcheck.cli serve --open" in text
-    assert (tmp_path / "icons" / "io.github.speakcheck.svg").read_text().startswith("<svg")
+    assert "Exec=" in text and "-m zephvox.cli serve --open" in text
+    assert (tmp_path / "icons" / "io.github.zephvox.svg").read_text().startswith("<svg")

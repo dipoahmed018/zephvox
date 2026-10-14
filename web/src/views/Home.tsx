@@ -65,7 +65,7 @@ export function Home() {
             Press record in the sky, or <Shortcut action="toggle_recording" /> from any app, and talk for a minute or two.
           </>
         ) : (
-          "Press record in the sky and talk for a minute or two. When you stop, speakcheck finds what to work on."
+          "Press record in the sky and talk for a minute or two. When you stop, zephvox finds what to work on."
         )}
       </PageHead>
 

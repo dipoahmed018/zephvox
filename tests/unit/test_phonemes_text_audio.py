@@ -3,11 +3,11 @@ import wave
 import numpy as np
 import pytest
 
-from speakcheck.engine import audio
-from speakcheck.engine.errors import AudioError
-from speakcheck.engine.events import EventBus
-from speakcheck.engine.models import Segment, Transcript, Word
-from speakcheck.engine.phonemes import (
+from zephvox.engine import audio
+from zephvox.engine.errors import AudioError
+from zephvox.engine.events import EventBus
+from zephvox.engine.models import Segment, Transcript, Word
+from zephvox.engine.phonemes import (
     arpabet_to_ipa,
     deletion_cost,
     insertion_cost,
@@ -17,7 +17,7 @@ from speakcheck.engine.phonemes import (
     split_ipa,
     substitution_cost,
 )
-from speakcheck.engine.text import clean_word, normalize_word, split_into_sentences
+from zephvox.engine.text import clean_word, normalize_word, split_into_sentences
 
 
 class TestPhonemes:

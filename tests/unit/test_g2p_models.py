@@ -5,16 +5,16 @@ import sys
 
 import pytest
 
-from speakcheck.engine.models import Pronunciation
-from speakcheck.providers.base import Services
-from speakcheck.providers.g2p.deep_phonemizer import DeepPhonemizerG2P
-from speakcheck.providers.tts import kokoro
+from zephvox.engine.models import Pronunciation
+from zephvox.providers.base import Services
+from zephvox.providers.g2p.deep_phonemizer import DeepPhonemizerG2P
+from zephvox.providers.tts import kokoro
 
 
 class TestDeepPhonemizer:
     def test_tokenizer(self):
         pytest.importorskip("torch")
-        from speakcheck.providers.g2p._deep_phonemizer import Tokenizer
+        from zephvox.providers.g2p._deep_phonemizer import Tokenizer
 
         text = Tokenizer(list("abc"), ["de", "en_us"], char_repeats=2, lowercase=True)
         # 0 pad, 1 <de>, 2 <en_us>, 3 <end>, then a b c
@@ -27,7 +27,7 @@ class TestDeepPhonemizer:
         pytest.importorskip("safetensors")
         from safetensors.torch import save_file
 
-        from speakcheck.providers.g2p._deep_phonemizer import ForwardTransformer
+        from zephvox.providers.g2p._deep_phonemizer import ForwardTransformer
 
         config = {"model": {"d_model": 8, "d_fft": 16, "layers": 1, "heads": 2},
                   "preprocessing": {"languages": ["en_us"], "text_symbols": list("abcdefghijklmnopqrstuvwxyz'"),

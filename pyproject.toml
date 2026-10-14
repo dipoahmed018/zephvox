@@ -1,5 +1,5 @@
 [project]
-name = "speakcheck"
+name = "zephvox"
 version = "0.1.0"
 description = "Pluggable engine that finds pronunciation and grammar mistakes in your spoken English"
 readme = "README.md"
@@ -53,67 +53,67 @@ voice = [
     # spaCy model Kokoro's text front end needs; it would otherwise try to pip-install it at runtime.
     "en-core-web-sm>=3.8",
 ]
-# Optional GPL plugin: espeak-ng pronunciations (plugins/speakcheck-espeak, a separate package).
-espeak = ["speakcheck-espeak"]
-# Local daemon + web GUI, and `speakcheck server serve` (websockets: practice streaming).
+# Optional GPL plugin: espeak-ng pronunciations (plugins/zephvox-espeak, a separate package).
+espeak = ["zephvox-espeak"]
+# Local daemon + web GUI, and `zephvox server serve` (websockets: practice streaming).
 web = ["fastapi>=0.115", "uvicorn>=0.30", "python-multipart>=0.0.9", "websockets>=13"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-cov>=5", "respx>=0.21"]
 
 [project.scripts]
-speakcheck = "speakcheck.cli:main"
+zephvox = "zephvox.cli:main"
 
 # Built-in plugins are registered exactly like third-party ones.
-[project.entry-points."speakcheck.capture"]
-pipewire = "speakcheck.providers.capture.pipewire:PipeWireCapture"
-sounddevice = "speakcheck.providers.capture.sounddevice:SoundDeviceCapture"
+[project.entry-points."zephvox.capture"]
+pipewire = "zephvox.providers.capture.pipewire:PipeWireCapture"
+sounddevice = "zephvox.providers.capture.sounddevice:SoundDeviceCapture"
 
-[project.entry-points."speakcheck.tts"]
-kokoro = "speakcheck.providers.tts.kokoro:KokoroTTS"
-espeak-ng = "speakcheck.providers.tts.espeak:EspeakTTS"
+[project.entry-points."zephvox.tts"]
+kokoro = "zephvox.providers.tts.kokoro:KokoroTTS"
+espeak-ng = "zephvox.providers.tts.espeak:EspeakTTS"
 
-[project.entry-points."speakcheck.triggers"]
-portal = "speakcheck.providers.triggers.portal:PortalTriggers"
-pynput = "speakcheck.providers.triggers.pynput:PynputTriggers"
+[project.entry-points."zephvox.triggers"]
+portal = "zephvox.providers.triggers.portal:PortalTriggers"
+pynput = "zephvox.providers.triggers.pynput:PynputTriggers"
 
-[project.entry-points."speakcheck.stt"]
-hf-whisper = "speakcheck.providers.stt.hf_whisper:HFWhisperSTT"
-faster-whisper = "speakcheck.providers.stt.faster_whisper:FasterWhisperSTT"
+[project.entry-points."zephvox.stt"]
+hf-whisper = "zephvox.providers.stt.hf_whisper:HFWhisperSTT"
+faster-whisper = "zephvox.providers.stt.faster_whisper:FasterWhisperSTT"
 
-[project.entry-points."speakcheck.g2p"]
-cmudict = "speakcheck.providers.g2p.cmudict:CMUDictG2P"
-misaki = "speakcheck.providers.g2p.misaki:MisakiG2P"
-deep-phonemizer = "speakcheck.providers.g2p.deep_phonemizer:DeepPhonemizerG2P"
-chain = "speakcheck.providers.g2p.chain:ChainG2P"
+[project.entry-points."zephvox.g2p"]
+cmudict = "zephvox.providers.g2p.cmudict:CMUDictG2P"
+misaki = "zephvox.providers.g2p.misaki:MisakiG2P"
+deep-phonemizer = "zephvox.providers.g2p.deep_phonemizer:DeepPhonemizerG2P"
+chain = "zephvox.providers.g2p.chain:ChainG2P"
 
-[project.entry-points."speakcheck.phonemes"]
-wav2vec2 = "speakcheck.providers.phonemes.wav2vec2:Wav2Vec2PhonemeRecognizer"
+[project.entry-points."zephvox.phonemes"]
+wav2vec2 = "zephvox.providers.phonemes.wav2vec2:Wav2Vec2PhonemeRecognizer"
 
-[project.entry-points."speakcheck.llm"]
-openai-compat = "speakcheck.providers.llm.openai_compat:OpenAICompatLLM"
+[project.entry-points."zephvox.llm"]
+openai-compat = "zephvox.providers.llm.openai_compat:OpenAICompatLLM"
 
-[project.entry-points."speakcheck.analyzers"]
-pronunciation = "speakcheck.analyzers.pronunciation.analyzer:PronunciationAnalyzer"
-grammar = "speakcheck.analyzers.grammar.analyzer:GrammarAnalyzer"
-practice = "speakcheck.analyzers.pronunciation.practice:PracticeAnalyzer"
+[project.entry-points."zephvox.analyzers"]
+pronunciation = "zephvox.analyzers.pronunciation.analyzer:PronunciationAnalyzer"
+grammar = "zephvox.analyzers.grammar.analyzer:GrammarAnalyzer"
+practice = "zephvox.analyzers.pronunciation.practice:PracticeAnalyzer"
 
-[project.entry-points."speakcheck.reporters"]
-terminal = "speakcheck.reporters.terminal:TerminalReporter"
-markdown = "speakcheck.reporters.markdown:MarkdownReporter"
-json = "speakcheck.reporters.json:JsonReporter"
+[project.entry-points."zephvox.reporters"]
+terminal = "zephvox.reporters.terminal:TerminalReporter"
+markdown = "zephvox.reporters.markdown:MarkdownReporter"
+json = "zephvox.reporters.json:JsonReporter"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/speakcheck"]
+packages = ["src/zephvox"]
 
 [tool.uv]
 default-groups = ["dev"]
 conflicts = [[{ extra = "cpu" }, { extra = "cuda" }, { extra = "rocm" }]]
-# Kokoro asks for misaki[en], whose espeak fallback is GPL. speakcheck supplies its own fallback
+# Kokoro asks for misaki[en], whose espeak fallback is GPL. zephvox supplies its own fallback
 # (deep-phonemizer), so install plain misaki and keep the default install free of GPL code.
 override-dependencies = ["misaki>=0.9.4"]
 environments = [
@@ -124,7 +124,7 @@ environments = [
 ]
 
 [tool.uv.sources]
-speakcheck-espeak = { path = "plugins/speakcheck-espeak" }
+zephvox-espeak = { path = "plugins/zephvox-espeak" }
 # macOS takes torch from PyPI (its only build, with Apple GPU support).
 torch = [
     { index = "pytorch-cpu", extra = "cpu", marker = "sys_platform != 'darwin'" },
@@ -161,7 +161,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["speakcheck"]
+source = ["zephvox"]
 omit = [
     # Thin wrappers around heavy model runtimes; covered by the opt-in integration suite.
     "*/providers/stt/*",

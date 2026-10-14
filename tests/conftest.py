@@ -8,16 +8,16 @@ from typing import Any
 import numpy as np
 import pytest
 
-from speakcheck.analyzers.grammar.analyzer import GrammarAnalyzer
-from speakcheck.analyzers.pronunciation.analyzer import PronunciationAnalyzer
-from speakcheck.analyzers.pronunciation.practice import PracticeAnalyzer
-from speakcheck.engine import audio
-from speakcheck.engine.capabilities import SystemCapabilities
-from speakcheck.engine.config import Config, EngineSettings
-from speakcheck.engine.engine import Engine
-from speakcheck.engine.models import AudioRef, Pronunciation, Segment, Transcript, Word
-from speakcheck.engine.registry import Registry
-from speakcheck.providers.base import (
+from zephvox.analyzers.grammar.analyzer import GrammarAnalyzer
+from zephvox.analyzers.pronunciation.analyzer import PronunciationAnalyzer
+from zephvox.analyzers.pronunciation.practice import PracticeAnalyzer
+from zephvox.engine import audio
+from zephvox.engine.capabilities import SystemCapabilities
+from zephvox.engine.config import Config, EngineSettings
+from zephvox.engine.engine import Engine
+from zephvox.engine.models import AudioRef, Pronunciation, Segment, Transcript, Word
+from zephvox.engine.registry import Registry
+from zephvox.providers.base import (
     Availability,
     CaptureProvider,
     Device,
@@ -27,9 +27,9 @@ from speakcheck.providers.base import (
     ProviderSettings,
     STTProvider,
 )
-from speakcheck.reporters.json import JsonReporter
-from speakcheck.reporters.markdown import MarkdownReporter
-from speakcheck.reporters.terminal import TerminalReporter
+from zephvox.reporters.json import JsonReporter
+from zephvox.reporters.markdown import MarkdownReporter
+from zephvox.reporters.terminal import TerminalReporter
 
 # "I think we should go now." — word timings on a 3 s clip.
 SENTENCE_1 = [("I", 0.0, 0.2), ("think", 0.2, 0.6), ("we", 0.6, 0.8), ("should", 0.8, 1.1), ("go", 1.1, 1.3),
@@ -141,8 +141,13 @@ class UnavailableSTT(STTProvider):
 
 @pytest.fixture(autouse=True)
 def _private_data_dir(tmp_path, monkeypatch):
-    """Tests never read or write the real ~/.local/share/speakcheck (settings.json, sessions…)."""
-    monkeypatch.setenv("SPEAKCHECK_HOME", str(tmp_path / "speakcheck-home"))
+    """Tests never read or write the real ~/.local/share/zephvox (settings.json, sessions…)."""
+    monkeypatch.setenv("ZEPHVOX_HOME", str(tmp_path / "zephvox-home"))
+    # Folder lookups (and the move from the old "speakcheck" folders) stay inside the test, too.
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg-data"))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "xdg-config"))
+    monkeypatch.delenv("SPEAKCHECK_HOME", raising=False)
+    monkeypatch.delenv("SPEAKCHECK_CONFIG", raising=False)
 
 
 @pytest.fixture(autouse=True)

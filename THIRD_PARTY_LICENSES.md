@@ -1,6 +1,6 @@
 # Third-party licenses
 
-speakcheck's own code is AGPL-3.0 (or a commercial license, see [LICENSING.md](LICENSING.md)). It
+zephvox's own code is AGPL-3.0 (or a commercial license, see [LICENSING.md](LICENSING.md)). It
 uses the packages and models below, which are downloaded during installation and keep their own
 licenses. **The default installation contains no GPL code**; LGPL packages are used unmodified as
 separate libraries.
@@ -9,9 +9,9 @@ separate libraries.
 
 | What | Where | License |
 |---|---|---|
-| CMU Pronouncing Dictionary | `src/speakcheck/data/cmudict/` | BSD-style, Carnegie Mellon University (`LICENSE` next to it) |
-| DeepPhonemizer inference code (adapted) | `src/speakcheck/providers/g2p/_deep_phonemizer.py` | MIT, Axel Springer News Media & Tech (notice in the file) |
-| speakcheck-espeak plugin | `plugins/speakcheck-espeak/` | GPL-3.0-or-later: a separate, optional package, **not** covered by the commercial license |
+| CMU Pronouncing Dictionary | `src/zephvox/data/cmudict/` | BSD-style, Carnegie Mellon University (`LICENSE` next to it) |
+| DeepPhonemizer inference code (adapted) | `src/zephvox/providers/g2p/_deep_phonemizer.py` | MIT, Axel Springer News Media & Tech (notice in the file) |
+| zephvox-espeak plugin | `plugins/zephvox-espeak/` | GPL-3.0-or-later: a separate, optional package, **not** covered by the commercial license |
 
 ## Models (downloaded on first use)
 
@@ -55,6 +55,6 @@ Other models you configure yourself keep their own licenses.
 
 ## Optional GPL plugin
 
-`uv sync --extra espeak` installs [`plugins/speakcheck-espeak`](plugins/speakcheck-espeak), which
+`uv sync --extra espeak` installs [`plugins/zephvox-espeak`](plugins/zephvox-espeak), which
 brings **phonemizer** and **espeakng-loader** (bundling **espeak-ng**), all GPL-3.0-or-later.
-speakcheck never imports them unless you install the plugin and choose its `espeak` driver.
+zephvox never imports them unless you install the plugin and choose its `espeak` driver.

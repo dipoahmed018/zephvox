@@ -4,14 +4,14 @@ import json
 
 import pytest
 
-from speakcheck.client import credentials
-from speakcheck.client.backend import RemoteBackend
-from speakcheck.client.remote import QueuedOffline, ServerClient, ServerUnreachable
-from speakcheck.client.sync import PENDING_FILE, SyncState, SyncWorker, pending
-from speakcheck.engine.config import Config, EngineSettings, RemoteSettings
-from speakcheck.engine.engine import Engine
-from speakcheck.engine.practice import PracticeAttempt
-from speakcheck.web.daemon import Daemon
+from zephvox.client import credentials
+from zephvox.client.backend import RemoteBackend
+from zephvox.client.remote import QueuedOffline, ServerClient, ServerUnreachable
+from zephvox.client.sync import PENDING_FILE, SyncState, SyncWorker, pending
+from zephvox.engine.config import Config, EngineSettings, RemoteSettings
+from zephvox.engine.engine import Engine
+from zephvox.engine.practice import PracticeAttempt
+from zephvox.web.daemon import Daemon
 from tests.unit.test_client_remote import URL, remote  # noqa: F401  (fixture)
 
 
@@ -138,7 +138,7 @@ class TestOfflineQueue:
     def test_daemon_reports_and_lists_queued_recordings(self, remote, engine, monkeypatch):  # noqa: F811
         from fastapi.testclient import TestClient
 
-        from speakcheck.web.app import create_app
+        from zephvox.web.app import create_app
 
         engine.config.providers["stt"] = []
         daemon = Daemon(engine, start_triggers=False)
