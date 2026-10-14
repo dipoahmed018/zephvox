@@ -15,7 +15,7 @@
   <link rel="preload" href="assets/fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="assets/site.css">
   <script>
-    // Apply the saved theme before the first paint (no flash), and mark that scripts run.
+    // Light is the default. Apply a saved choice before the first paint (no flash), and mark that scripts run.
     document.documentElement.classList.add("js");
     try {
       var t = localStorage.getItem("zephvox.site.theme");
@@ -41,6 +41,10 @@
       <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
       <symbol id="i-laptop" viewBox="0 0 24 24"><rect width="18" height="12" x="3" y="4" rx="2"/><path d="M2 20h20"/></symbol>
       <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+      <symbol id="i-keyboard" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></symbol>
+      <symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2M15 20v2M2 15h2M2 9h2M20 15h2M20 9h2M9 2v2M9 20v2"/></symbol>
+      <symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+      <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
       <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
       <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
     </defs>
@@ -69,7 +73,7 @@
       <div class="wrap">
         <div class="hero-copy">
           <p class="eyebrow">Spoken English coach</p>
-          <h1 style="margin-top:14px">Say it. <em>See what to fix.</em></h1>
+          <h1>Say it. <em>See what to fix.</em></h1>
           <p class="lede">zephvox listens while you speak English and shows the sounds and sentences to work on, then lets you practice them until they pass. Everything can run on your own computer, offline.</p>
           <div class="cta">
             <a class="btn primary" href="#install">Install zephvox</a>
@@ -108,7 +112,7 @@
       </div>
     </section>
 
-    <section id="sounds" style="padding-top:0">
+    <section id="sounds" class="tight-top">
       <div class="wrap demo">
         <div class="card" role="img" aria-label="Example: thorough should start with the th sound, but it was heard as t.">
           <div><span class="word">thorough</span><span class="ipa">/θ ʌ ɹ oʊ/</span></div>
@@ -128,7 +132,7 @@
       </div>
     </section>
 
-    <section id="features" style="padding-top:0">
+    <section id="features" class="tight-top">
       <div class="wrap">
         <div class="section-head">
           <p class="eyebrow">What you get</p>
@@ -141,13 +145,14 @@
           <div class="feature"><span class="badge"><svg class="icon"><use href="#i-target"/></svg></span><h3>Practice that scores you</h3><p>Say a word and get a 0–100 score a moment later. It stops listening when you stop talking.</p></div>
           <div class="feature"><span class="badge"><svg class="icon"><use href="#i-wind"/></svg></span><h3>A page that shows what's happening</h3><p>Wind that follows your voice while you record and carries your words through each step.</p></div>
           <div class="feature"><span class="badge"><svg class="icon"><use href="#i-trend"/></svg></span><h3>Progress over time</h3><p>Your weakest words and the sounds you mix up most, across every recording.</p></div>
+          <div class="feature"><span class="badge"><svg class="icon"><use href="#i-sliders"/></svg></span><h3>Every option, in the page</h3><p>Pick models, drivers, thresholds and shortcut keys in Settings. Changes apply right away, and no config file needs editing.</p></div>
           <div class="feature"><span class="badge"><svg class="icon"><use href="#i-lock"/></svg></span><h3>Private and offline</h3><p>The full app runs on your computer, and after the install it needs no internet. Nothing is sent anywhere.</p></div>
           <div class="feature"><span class="badge"><svg class="icon"><use href="#i-share"/></svg></span><h3>One strong machine, many devices</h3><p>Turn on sharing and your other devices, or other people, can analyze with your GPU through a small client.</p></div>
         </div>
       </div>
     </section>
 
-    <section id="install" style="background:color-mix(in srgb, var(--sky) 5%, var(--bg))">
+    <section id="install" class="tinted">
       <div class="wrap">
         <div class="section-head">
           <p class="eyebrow">Setup guide</p>
@@ -339,27 +344,27 @@ irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | ie
       </div>
     </section>
 
-    <section id="help" style="padding-top:0">
-      <div class="wrap">
+    <section id="help" class="tight-top">
+      <div class="wrap split">
         <div class="section-head">
           <p class="eyebrow">Troubleshooting</p>
           <h2>If something doesn't work.</h2>
           <p>Running <code>zephvox doctor</code> prints what zephvox found on your computer, which helps with most of these.</p>
+          <p class="fine">Still stuck? <a href="https://github.com/dipoahmed018/zephvox/issues">Open an issue</a> and include the output of <code>zephvox doctor</code>.</p>
         </div>
         <div class="faq">
-          <details><summary>The report says "Grammar was skipped"</summary><p>The grammar model isn't downloaded yet. Open <b>Settings → Models &amp; checks → Grammar</b> and press <b>Download</b>, or run <code>ollama pull qwen3:8b</code> (use the model name shown there). Pronunciation still works in the meantime.</p></details>
-          <details><summary>The shortcut does nothing</summary><p>Check <b>Settings → General → Shortcuts</b>: it should say <b>Active</b>. On Linux, run <code>zephvox desktop-entry</code> once and allow the shortcuts when your desktop asks. On macOS, allow zephvox under <b>Privacy &amp; Security → Accessibility</b>. Make sure only one copy of zephvox is running. You can always bind <code>zephvox toggle</code> in your system's own keyboard settings.</p></details>
-          <details><summary>My AMD or NVIDIA GPU isn't used</summary><p>NVIDIA needs the normal driver, version 525 or newer; no CUDA toolkit. On AMD with Linux, your user must be in the <code>render</code> and <code>video</code> groups (the setup tells you), and some cards need an <code>HSA_OVERRIDE_GFX_VERSION</code> value, which the setup offers. AMD and Intel GPUs on Windows aren't supported by PyTorch, so the CPU profiles are used.</p></details>
-          <details><summary>The microphone isn't recording</summary><p>Choose it under <b>Settings → General → Microphone</b>. On macOS and Windows, allow microphone access for the terminal or app that started zephvox.</p></details>
-          <details><summary>The client can't connect to my server</summary><p>Check the address (it should start with <code>https://</code> unless the server is on the same computer) and that the invite hasn't been used or expired; ask for a new one if so. Servers that aren't on your own network need HTTPS in front of them.</p></details>
-          <details><summary>Analysis is very slow</summary><p>You're probably on a CPU profile. A smaller speech model and turning off grammar help, or use a server with a GPU. The profile can be changed any time in Settings.</p></details>
+          <details><summary><svg class="icon lead"><use href="#i-text"/></svg><span>The report says "Grammar was skipped"</span></summary><p>The grammar model isn't downloaded yet. Open <b>Settings → Models &amp; checks → Grammar</b> and press <b>Download</b>, or run <code>ollama pull qwen3:8b</code> (use the model name shown there). Pronunciation still works in the meantime.</p></details>
+          <details><summary><svg class="icon lead"><use href="#i-keyboard"/></svg><span>The shortcut does nothing</span></summary><p>Check <b>Settings → General → Shortcuts</b>: it should say <b>Active</b>. On Linux, run <code>zephvox desktop-entry</code> once and allow the shortcuts when your desktop asks. On macOS, allow zephvox under <b>Privacy &amp; Security → Accessibility</b>. Make sure only one copy of zephvox is running. You can always bind <code>zephvox toggle</code> in your system's own keyboard settings.</p></details>
+          <details><summary><svg class="icon lead"><use href="#i-cpu"/></svg><span>My AMD or NVIDIA GPU isn't used</span></summary><p>NVIDIA needs the normal driver, version 525 or newer; no CUDA toolkit. On AMD with Linux, your user must be in the <code>render</code> and <code>video</code> groups (the setup tells you), and some cards need an <code>HSA_OVERRIDE_GFX_VERSION</code> value, which the setup offers. AMD and Intel GPUs on Windows aren't supported by PyTorch, so the CPU profiles are used.</p></details>
+          <details><summary><svg class="icon lead"><use href="#i-mic"/></svg><span>The microphone isn't recording</span></summary><p>Choose it under <b>Settings → General → Microphone</b>. On macOS and Windows, allow microphone access for the terminal or app that started zephvox.</p></details>
+          <details><summary><svg class="icon lead"><use href="#i-cloud"/></svg><span>The client can't connect to my server</span></summary><p>Check the address (it should start with <code>https://</code> unless the server is on the same computer) and that the invite hasn't been used or expired; ask for a new one if so. Servers that aren't on your own network need HTTPS in front of them.</p></details>
+          <details><summary><svg class="icon lead"><use href="#i-gauge"/></svg><span>Analysis is very slow</span></summary><p>You're probably on a CPU profile. A smaller speech model and turning off grammar help, or use a server with a GPU. The profile can be changed any time in Settings.</p></details>
         </div>
-        <p class="fine" style="margin-top:20px">Still stuck? <a href="https://github.com/dipoahmed018/zephvox/issues">Open an issue</a> and include the output of <code>zephvox doctor</code>.</p>
       </div>
     </section>
 
-    <section id="faq" style="padding-top:0">
-      <div class="wrap">
+    <section id="faq" class="tight-top">
+      <div class="wrap split">
         <div class="section-head">
           <p class="eyebrow">Questions</p>
           <h2>Before you install.</h2>

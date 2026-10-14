@@ -66,30 +66,40 @@ function DriverOrder({ kind }: { kind: string }) {
         )}
       </div>
       <p className="mt-0 mb-3 text-sm text-muted-foreground">The first one that can run here is used; the others are fallbacks.</p>
-      <ol className="m-0 grid list-none gap-1.5 p-0">
+      <ol className="m-0 grid list-none grid-cols-1 gap-1.5 p-0">
         {order.map((name, i) => {
           const d = byName[name];
           return (
-            <li key={name} className={cn("flex items-center gap-2 rounded-xl border px-3 py-2", name === inUse ? "border-primary/60 bg-primary/5" : "border-border bg-card")}>
-              <span className="w-5 text-center text-sm text-muted-foreground tabular-nums">{i + 1}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-semibold">{DRIVER_NAMES[name] ?? name}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {name}
-                  {d && !d.available && ` · ${d.reason}`}
-                  {!d && " · not installed"}
+            <li
+              key={name}
+              className={cn(
+                "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border px-3 py-2",
+                name === inUse ? "border-primary/60 bg-primary/5" : "border-border bg-card",
+              )}
+            >
+              <span className="flex min-w-0 flex-1 basis-44 items-center gap-2">
+                <span className="w-5 shrink-0 text-center text-sm text-muted-foreground tabular-nums">{i + 1}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold">{DRIVER_NAMES[name] ?? name}</span>
+                  <span className="block truncate text-xs text-muted-foreground" title={d && !d.available ? d.reason : undefined}>
+                    {name}
+                    {d && !d.available && ` · ${d.reason}`}
+                    {!d && " · not installed"}
+                  </span>
                 </span>
               </span>
-              {name === inUse ? <Badge variant="sky">in use</Badge> : d && !d.available ? <Badge variant="alert">can't run</Badge> : null}
-              <Button variant="ghost" size="icon-sm" aria-label={`Move ${name} up`} disabled={i === 0} onClick={() => move(i, -1)}>
-                <ArrowUp />
-              </Button>
-              <Button variant="ghost" size="icon-sm" aria-label={`Move ${name} down`} disabled={i === order.length - 1} onClick={() => move(i, 1)}>
-                <ArrowDown />
-              </Button>
-              <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} onClick={() => set(order.filter((n) => n !== name))}>
-                <X />
-              </Button>
+              <span className="ml-auto flex shrink-0 items-center gap-1">
+                {name === inUse ? <Badge variant="sky">in use</Badge> : d && !d.available ? <Badge variant="alert">can't run</Badge> : null}
+                <Button variant="ghost" size="icon-sm" aria-label={`Move ${name} up`} disabled={i === 0} onClick={() => move(i, -1)}>
+                  <ArrowUp />
+                </Button>
+                <Button variant="ghost" size="icon-sm" aria-label={`Move ${name} down`} disabled={i === order.length - 1} onClick={() => move(i, 1)}>
+                  <ArrowDown />
+                </Button>
+                <Button variant="ghost" size="icon-sm" aria-label={`Remove ${name}`} onClick={() => set(order.filter((n) => n !== name))}>
+                  <X />
+                </Button>
+              </span>
             </li>
           );
         })}

@@ -1,4 +1,4 @@
-/* zephvox website (the client). Same Breeze tokens as the app: web/DESIGN.md. */
+/* zephvox website. The Breeze tokens of the app (web/DESIGN.md): light by default, dark when chosen. */
 
 @font-face {
   font-family: "Fraunces";
@@ -44,29 +44,6 @@
   --serif: "Fraunces", Georgia, "Times New Roman", serif;
   --sans: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0e1721;
-    --surface: #15212e;
-    --ink: #e2ebf4;
-    --muted: #92a3b5;
-    --border: #24364a;
-    --sky: #7eb4e2;
-    --sky-ink: #7eb4e2;
-    --on-sky: #0e1721;
-    --alert: #eb9c7c;
-    --alert-ink: #eb9c7c;
-    --mint: #86cfc6;
-    --mint-ink: #86cfc6;
-    --success-ink: #74c49f;
-    --sky-a: #13212f;
-    --sky-b: #0e1721;
-    --wind: #7eb4e2;
-    --code-bg: #0b121a;
-    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 18px 40px -20px rgb(0 0 0 / 0.7);
-    color-scheme: dark;
-  }
 }
 :root[data-theme="dark"] {
   --bg: #0e1721;
@@ -252,14 +229,6 @@ pre {
 :root[data-theme="dark"] .moon {
   display: block;
 }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .sun {
-    display: none;
-  }
-  :root:not([data-theme="light"]) .moon {
-    display: block;
-  }
-}
 @media (max-width: 760px) {
   .nav a:not(.keep) {
     display: none;
@@ -271,7 +240,7 @@ pre {
   position: relative;
   overflow: hidden;
   background: linear-gradient(180deg, var(--sky-a), var(--sky-b));
-  padding-block: clamp(48px, 8vw, 96px) clamp(40px, 6vw, 72px);
+  padding-block: clamp(48px, 8vw, 96px) clamp(16px, 3vw, 32px);
   isolation: isolate;
 }
 .hero canvas {
@@ -287,6 +256,7 @@ pre {
   text-align: center;
 }
 .hero h1 {
+  margin-top: 14px;
   font-size: clamp(2.6rem, 7.5vw, 5rem);
   font-weight: 300;
 }
@@ -370,6 +340,15 @@ pre {
 section {
   padding-block: clamp(56px, 8vw, 96px);
 }
+section.tight-top {
+  padding-top: 0;
+}
+section.tinted {
+  background: color-mix(in srgb, var(--sky) 5%, var(--bg));
+}
+#how {
+  padding-top: clamp(40px, 6vw, 72px);
+}
 .section-head {
   max-width: 640px;
   margin-bottom: clamp(28px, 4vw, 44px);
@@ -442,9 +421,12 @@ section {
 .feature {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  align-content: start; /* the row stretches the card; extra height must not open up under the title */
   gap: 0 16px;
 }
 .feature .badge {
+  grid-row: 1 / span 2;
   display: grid;
   place-items: center;
   width: 44px;
@@ -458,12 +440,13 @@ section {
   font-weight: 800;
   font-size: 1.05rem;
   letter-spacing: 0;
-  line-height: 1.3;
-  margin-top: 2px;
+  line-height: 1.35;
+  margin-top: 0;
+  text-wrap: pretty;
 }
 .feature p {
   grid-column: 2;
-  margin-top: 4px;
+  margin-top: 6px;
   color: var(--muted);
 }
 
@@ -576,6 +559,9 @@ section {
   font-weight: 400;
 }
 .choice h3 .icon {
+  width: 24px;
+  height: 24px;
+  flex: none;
   color: var(--sky-ink);
 }
 .choice p {
@@ -771,7 +757,7 @@ td:first-child {
 }
 .code pre {
   margin: 0;
-  padding: 46px 18px 16px;
+  padding: 42px 18px 14px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: 0.8rem;
@@ -803,6 +789,9 @@ td:first-child {
 .copy[data-done="true"] {
   color: var(--success-ink);
   border-color: var(--success-ink);
+}
+.guide .note {
+  margin-top: 28px;
 }
 .note {
   margin-top: 16px;
@@ -854,6 +843,32 @@ td:first-child {
 }
 .faq {
   max-width: 760px;
+}
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr);
+  gap: clamp(28px, 5vw, 72px);
+  align-items: start;
+}
+.split .section-head {
+  position: sticky;
+  top: 96px;
+  margin-bottom: 0;
+}
+.split .faq {
+  max-width: none;
+}
+.split .section-head .fine {
+  margin-top: 18px;
+}
+.faq summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.faq summary .lead {
+  flex: none;
+  color: var(--sky-ink);
 }
 .faq details {
   border-top: 1px solid var(--border);
@@ -915,8 +930,13 @@ td:first-child {
 @media (max-width: 860px) {
   .steps,
   .demo,
-  .choose {
+  .choose,
+  .split {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .split .section-head {
+    position: static;
+    margin-bottom: clamp(20px, 4vw, 32px);
   }
 }
 @media (max-width: 520px) {

@@ -1,9 +1,8 @@
 // zephvox website: theme, copy buttons, install tabs, and the wind in the hero.
 (() => {
   const root = document.documentElement;
-  const dark = matchMedia("(prefers-color-scheme: dark)");
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
-  const isDark = () => (root.dataset.theme ? root.dataset.theme === "dark" : dark.matches);
+  const isDark = () => root.dataset.theme === "dark"; // light unless the visitor chose dark
 
   // ---- theme ------------------------------------------------------------------------------
   const shot = document.getElementById("shot");
@@ -22,7 +21,6 @@
     }
     applyTheme();
   });
-  dark.addEventListener("change", applyTheme);
 
   // ---- copy buttons -----------------------------------------------------------------------
   document.querySelectorAll(".copy").forEach((btn) => {
