@@ -119,6 +119,7 @@ export interface Status {
   recording: Recording | null;
   practice_target: { text: string; session_id: string | null } | null;
   triggers: Triggers;
+  engine?: EngineMode;
   doctor: {
     system: { gpu: { backend: string; name: string; vram_gb: number } | null; ram_gb: number };
     providers: ProviderStatus[];
@@ -163,4 +164,30 @@ export interface History {
   dismissed: number;
   categories: Record<string, [string, number][]>;
   targets: Record<string, [string, number][]>;
+}
+
+export interface EngineMode {
+  mode: "local" | "remote";
+  url: string | null;
+}
+
+export interface InstallProgress {
+  running: boolean;
+  ok: boolean | null;
+  log: string[];
+}
+
+export interface RemoteInfo {
+  mode: "local" | "remote";
+  url: string | null;
+  headers: string[];
+  sync: boolean;
+  connected: boolean;
+  device: string | null;
+  account: string | null;
+  insecure: boolean;
+  engine_installed: boolean;
+  install: InstallProgress;
+  reachable: boolean | null;
+  error: string | null;
 }

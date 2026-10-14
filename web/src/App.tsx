@@ -24,6 +24,14 @@ const NAV: { view: View; label: string; icon: typeof Mic }[] = [
   { view: "status", label: "Settings", icon: Settings },
 ];
 
+function hostOf(url: string | null): string {
+  try {
+    return url ? new URL(url).host : "your server";
+  } catch {
+    return url ?? "your server";
+  }
+}
+
 export function App() {
   const route = useRoute();
   const { state } = useEngine();
@@ -63,7 +71,9 @@ export function App() {
           </button>
         ))}
         <div className="sidebar-foot">
-          Runs on your computer. Nothing leaves it.
+          {state.engineMode?.mode === "remote"
+            ? `Analyzed on ${hostOf(state.engineMode.url)}; history stays here too.`
+            : "Runs on your computer. Nothing leaves it."}
           <br />
           <a href={SOURCE_URL} target="_blank" rel="noreferrer">
             Source code

@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import io
 import tempfile
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -41,6 +40,21 @@ class TargetBody(BaseModel):
 
 class ProfileBody(BaseModel):
     name: str
+
+
+class RemoteBody(BaseModel):
+    mode: str | None = None
+    url: str | None = None
+    headers: dict[str, str] | None = None
+    sync: bool | None = None
+    device_name: str | None = None
+
+
+class ConnectBody(BaseModel):
+    url: str
+    invite: str
+    device_name: str = "my computer"
+    headers: dict[str, str] | None = None
 
 
 class SettingsBody(BaseModel):
@@ -107,6 +121,30 @@ def create_app(daemon: Daemon) -> FastAPI:
     def put_settings(body: SettingsBody):
         return guard(daemon.update_settings, body.model_dump(exclude_none=True))
 
+    @app.get("/api/remote")
+    def get_remote(check: bool = True):
+        return daemon.remote_info(check)
+
+    @app.put("/api/remote")
+    def put_remote(body: RemoteBody):
+        return guard(daemon.set_remote, body.model_dump(exclude_unset=True))
+
+    @app.post("/api/remote/connect")
+    def connect(body: ConnectBody):
+        return guard(daemon.connect, body.url, body.invite, body.device_name, body.headers)
+
+    @app.post("/api/remote/rotate")
+    def rotate():
+        return guard(daemon.rotate_key)
+
+    @app.delete("/api/remote/key")
+    def forget():
+        return guard(daemon.forget_key)
+
+    @app.post("/api/install")
+    def install():
+        return guard(daemon.start_install)
+
     @app.get("/api/profiles")
     def get_profiles():
         return daemon.profiles()
@@ -117,9 +155,7 @@ def create_app(daemon: Daemon) -> FastAPI:
 
     @app.get("/api/voices")
     def voices():
-        provider = guard(engine.provider, "tts")
-        caps = provider.capabilities()
-        return {"provider": provider.name, "selected": caps.get("voice"), "voices": caps.get("voices", [])}
+        return guard(lambda: daemon.backend.voices())
 
     @app.get("/api/devices")
     def devices():
@@ -236,18 +272,12 @@ def create_app(daemon: Daemon) -> FastAPI:
             raise HTTPException(404, "No attempt audio")
         return Response(path.read_bytes(), media_type="audio/wav")
 
-    @lru_cache(maxsize=256)
-    def synthesize(text: str, voice_key: str) -> bytes:  # voice_key: a new voice must not reuse old audio
-        return engine.provider("tts").synthesize(text)
-
     @app.get("/api/tts")
     def tts(text: str):
         if not text.strip() or len(text) > 300:
             raise HTTPException(400, "Text must be 1–300 characters")
         try:
-            provider = engine.provider("tts")
-            key = f"{provider.name}:{provider.settings.model_dump_json()}"
-            return Response(synthesize(text.strip(), key), media_type="audio/wav")
+            return Response(daemon.backend.tts(text.strip()), media_type="audio/wav")
         except ProviderUnavailable as e:
             raise HTTPException(404, str(e)) from None
         except SpeakcheckError as e:

@@ -6,6 +6,7 @@ import type {
   PracticeStats,
   Profiles,
   Recording,
+  RemoteInfo,
   SessionSummary,
   Settings,
   Status,
@@ -69,6 +70,15 @@ export const api = {
   practiceStats: (target: string) =>
     request<PracticeStats>("GET", `/api/practice/stats?target=${encodeURIComponent(target)}`),
   history: () => request<History>("GET", "/api/history"),
+
+  remote: (check = true) => request<RemoteInfo>("GET", `/api/remote?check=${check}`),
+  setRemote: (changes: Partial<{ mode: "local" | "remote"; url: string; headers: Record<string, string>; sync: boolean }>) =>
+    request<RemoteInfo>("PUT", "/api/remote", changes),
+  connect: (url: string, invite: string, deviceName: string, headers?: Record<string, string>) =>
+    request<RemoteInfo>("POST", "/api/remote/connect", { url, invite, device_name: deviceName, headers }),
+  rotateKey: () => request<RemoteInfo>("POST", "/api/remote/rotate"),
+  forgetKey: () => request<RemoteInfo>("DELETE", "/api/remote/key"),
+  installEngine: () => request<unknown>("POST", "/api/install"),
 };
 
 export const urls = {

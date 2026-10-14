@@ -286,6 +286,14 @@ def create_server_app(server: Server) -> FastAPI:
 
     # --- reference voices ---------------------------------------------------------------
 
+    @app.get("/v1/voices")
+    def voices(who: Caller = Depends(caller)) -> dict[str, Any]:
+        try:
+            caps = server._tts_provider(None).capabilities()
+        except SpeakcheckError as e:
+            raise HTTPException(404, str(e)) from e
+        return {"selected": caps.get("voice"), "voices": caps.get("voices", [])}
+
     @app.get("/v1/tts")
     def tts(text: str = Query(min_length=1, max_length=300), voice: str | None = Query(default=None, max_length=40),
             who: Caller = Depends(caller)) -> Response:  # fmt: skip

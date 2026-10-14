@@ -1,9 +1,10 @@
 // Live engine state for the whole page, fed by the daemon's event stream (/api/events).
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
 import { api } from "./api";
-import type { PracticeAttempt, Status, Triggers } from "./types";
+import type { EngineMode, InstallProgress, PracticeAttempt, RemoteInfo, Status, Triggers } from "./types";
 
 export const STAGE_LABELS: Record<string, string> = {
+  upload: "Sending to the server",
   samples: "Loading audio",
   transcript: "Transcribing",
   expected_phonemes: "Looking up correct sounds",
@@ -33,6 +34,9 @@ export interface EngineState {
   lastAttempt: PracticeAttempt | null;
   practiceTarget: { text: string; session_id: string | null } | null;
   triggers: Triggers | null;
+  remote: RemoteInfo | null;
+  engineMode: EngineMode | null; // where analysis runs (from status, then remote_changed)
+  install: InstallProgress | null;
   notices: Notice[];
 }
 
@@ -45,6 +49,9 @@ export const initialState: EngineState = {
   lastAttempt: null,
   practiceTarget: null,
   triggers: null,
+  remote: null,
+  engineMode: null,
+  install: null,
   notices: [],
 };
 
@@ -74,6 +81,7 @@ export function reduce(state: EngineState, action: Action): EngineState {
         recording: r ? { mode: r.mode, level: r.level ?? 0, elapsed: r.elapsed ?? 0 } : null,
         practiceTarget: action.status.practice_target,
         triggers: action.status.triggers,
+        engineMode: action.status.engine ?? state.engineMode,
       };
     }
     case "dismiss_notice":
@@ -121,6 +129,14 @@ function reduceServer(state: EngineState, event: string, d: Record<string, any>)
       return { ...state, practiceTarget: d.target };
     case "triggers":
       return { ...state, triggers: d as Triggers };
+    case "remote_changed":
+      return { ...state, remote: d.remote as RemoteInfo, engineMode: { mode: d.remote.mode, url: d.remote.url } };
+    case "install":
+      return { ...state, install: d as InstallProgress };
+    case "install_output": {
+      const log = [...(state.install?.log ?? []), d.line as string].slice(-200);
+      return { ...state, install: { running: true, ok: null, ...state.install, log } };
+    }
     case "job_error":
     case "action_error":
       return addNotice(state, "error", d.message);

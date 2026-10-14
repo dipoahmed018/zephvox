@@ -283,7 +283,8 @@ class Recorder:
 def setup_args(tmp_path, **overrides):
     args = dict(config=tmp_path / "root" / "config.toml", profile=None, accelerator=None, yes=True,
                 no_download=False, no_ollama=False, no_launcher=True, no_verify=False, dry_run=False,
-                installed_version=None)  # fmt: skip
+                installed_version=None, role="full", server_url=None, server_header=None, invite=None,
+                device_name=None)  # fmt: skip
     args.update(overrides)
     return Namespace(**args)
 
@@ -320,6 +321,22 @@ class TestSetup:
         assert sync[sync.index("--extra") + 3] == "cuda"
         assert runner.ran("speakcheck.install.download") and runner.ran("selftest.wav")
         assert install_root.pulled == ["qwen3:8b"]
+
+    def test_server_role_and_switching_a_client_to_full(self, tmp_path, install_root):
+        runner = Recorder()
+        assert run_setup(tmp_path, runner, machine([nvidia(12)]), role="server") == 0
+        saved = state.InstallState.load(install_root.path)
+        assert saved.role == "server" and saved.extras == ["models", "cuda", "web", "voice"]
+        (sync,) = runner.ran("uv sync")
+        assert "desktop" not in sync
+        # A client install becoming full: it offers to analyze locally (default yes).
+        saved.role = "client"
+        saved.save(install_root.path)
+        data_dir = tmp_path / "data"
+        save_user_settings(data_dir, {"remote": {"mode": "remote", "url": "https://s.example"}})
+        assert run_setup(tmp_path, Recorder(), machine([nvidia(12)]), role="full") == 0
+        assert state.InstallState.load(install_root.path).role == "full"
+        assert load_user_settings(data_dir)["remote"] == {"mode": "local", "url": "https://s.example"}
 
     def test_profile_flag_and_cpu_build(self, tmp_path, install_root):
         runner = Recorder()

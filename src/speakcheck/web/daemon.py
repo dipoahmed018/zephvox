@@ -98,6 +98,9 @@ class Daemon:
         self._jobs = 0
         self._jobs_lock = threading.Lock()
         self.practice_target: dict[str, Any] | None = None  # {"text": ..., "session_id": ...}
+        self._backend: Any = None  # LocalBackend | RemoteBackend, built on first use
+        self._backend_lock = threading.Lock()
+        self.install = {"running": False, "ok": None, "log": []}
         self.analyzers_for_next: list[str] | None = None
         self.triggers: dict[str, Any] = {"driver": None, "active": False, "error": None, "description": ""}
         self._trigger_provider = None
@@ -140,6 +143,24 @@ class Daemon:
 
         return self._worker.submit(run)
 
+    # --- where analysis runs ----------------------------------------------------------------
+
+    @property
+    def backend(self) -> Any:
+        """This computer's engine, or the server in client mode (see `client/backend.py`)."""
+        from ..client.backend import make_backend
+
+        with self._backend_lock:
+            if self._backend is None:
+                self._backend = make_backend(self.engine)
+            return self._backend
+
+    def _reset_backend(self) -> None:
+        with self._backend_lock:
+            old, self._backend = self._backend, None
+        if old is not None:
+            old.close()
+
     # --- actions (shared by shortcuts, API and CLI) ---------------------------------------
 
     def start(self, mode: str = "analysis", analyzers: list[str] | None = None) -> Recording:
@@ -148,30 +169,35 @@ class Daemon:
             if not self.practice_target:
                 raise RecordingError("Pick a word to practise first")
             meta = dict(self.practice_target)
+            backend = self.backend  # fail now (e.g. not connected) rather than after recording
         else:
             self.analyzers_for_next = analyzers
-        return self.engine.start_recording(mode=mode, meta=meta)
+        recording = self.engine.start_recording(mode=mode, meta=meta)
+        if mode == "practice" and backend.remote:
+            # Open the stream while the user starts talking; audio follows from `_tick`.
+            threading.Thread(target=backend.practice_begin, args=(meta["text"],), daemon=True).start()
+        return recording
 
     def stop(self) -> Recording:
         recording = self.engine.stop_recording()
         if recording.mode == "practice":
             meta = recording.meta
-            self._submit("practice", lambda: self.engine.practice(meta["text"], recording, meta.get("session_id")))
+            self._submit("practice", lambda: self.backend.practice(meta["text"], recording, meta.get("session_id")))
         else:
             analyzers = self.analyzers_for_next
             self._submit("analysis", lambda: self._analyze(recording, analyzers))
         return recording
 
     def _analyze(self, recording: Recording | Session, analyzers: list[str] | None):
-        try:
-            result = self.engine.analyze(recording, analyzers)
-        finally:
-            self.engine.release("llm")  # an autostarted Ollama only lives during the job
+        result = self.backend.analyze(recording, analyzers)
         self.publish("analysis_done", session_id=result.session_id)
         return result
 
     def cancel(self) -> Recording:
-        return self.engine.cancel_recording()
+        recording = self.engine.cancel_recording()
+        if recording.mode == "practice" and self._backend is not None:
+            self._backend.practice_cancel()
+        return recording
 
     def toggle(self, mode: str = "analysis", analyzers: list[str] | None = None) -> Recording:
         status = self.engine.recording_status()
@@ -207,9 +233,8 @@ class Daemon:
 
     def _analyze_path(self, path: Path, analyzers: list[str] | None):
         try:
-            result = self.engine.analyze(path, analyzers)
+            result = self.backend.analyze(path, analyzers)
         finally:
-            self.engine.release("llm")
             path.unlink(missing_ok=True)
         self.publish("analysis_done", session_id=result.session_id)
         return result
@@ -241,6 +266,182 @@ class Daemon:
             self.engine.release("tts")
         self.publish("settings_changed", settings=self.settings())
         return self.settings()
+
+    # --- client mode: the server, this device's key, installing the engine here ------------------
+
+    def engine_installed(self) -> bool:
+        """Can analysis run on this computer (models extra + PyTorch installed)?"""
+        import importlib.util
+
+        return all(importlib.util.find_spec(m) is not None for m in ("torch", "transformers"))
+
+    def remote_info(self, check: bool = True) -> dict[str, Any]:
+        from ..client import credentials
+        from ..client.backend import client_for
+        from ..client.remote import ServerError, is_insecure
+
+        remote = self.engine.config.remote
+        data_dir = self.engine.config.engine.data_dir
+        creds = credentials.load(data_dir, remote.url) if remote.url else None
+        info: dict[str, Any] = {
+            "mode": remote.mode,
+            "url": remote.url,
+            "headers": sorted(remote.headers),  # names only: values may be secrets
+            "sync": remote.syncing,
+            "connected": creds is not None,
+            "device": creds.device_name if creds else None,
+            "account": creds.account if creds else None,
+            "insecure": bool(remote.url) and is_insecure(remote.url),
+            "engine_installed": self.engine_installed(),
+            "install": {k: (v[-200:] if k == "log" else v) for k, v in self.install.items()},
+            "reachable": None,
+            "error": None,
+        }
+        if check and remote.url:
+            client = client_for(self.engine)
+            try:
+                client.health()
+                info["reachable"] = True
+                if creds:
+                    account = client.account()
+                    info["account"] = account["name"]
+            except ServerError as e:
+                info["reachable"] = e.status is not None  # it answered, but said no
+                info["error"] = str(e)
+            finally:
+                client.close()
+        return info
+
+    def _save_remote(self, changes: dict[str, Any]) -> None:
+        data_dir = self.engine.config.engine.data_dir
+        stored = load_user_settings(data_dir)
+        remote = {**(stored.get("remote") or {}), **changes}
+        stored["remote"] = remote
+        save_user_settings(data_dir, stored)
+        self.engine.config = apply_user_settings(self.engine.config, stored)
+        self._reset_backend()
+
+    def set_remote(self, changes: dict[str, Any]) -> dict[str, Any]:
+        """Mode, server address, headers or sync. Local mode needs the engine installed here."""
+        if self.busy or self.engine.is_recording():
+            raise SpeakcheckError("finish the current recording or analysis first")
+        allowed = {k: v for k, v in changes.items() if k in ("mode", "url", "headers", "sync", "device_name")}
+        if allowed.get("mode") == "local" and not self.engine_installed():
+            raise SpeakcheckError("the engine isn't installed on this computer yet: install it first")
+        if allowed.get("mode") == "remote" and not (allowed.get("url") or self.engine.config.remote.url):
+            raise SpeakcheckError("enter the server's address first")
+        if "url" in allowed:
+            allowed["url"] = (allowed["url"] or "").strip().rstrip("/") or None
+        self._save_remote(allowed)
+        info = self.remote_info()
+        self.publish("remote_changed", remote=info)
+        return info
+
+    def connect(self, url: str, invite: str, device_name: str, headers: dict[str, str] | None = None) -> dict[str, Any]:
+        """Redeem an invite: this device gets its own key, and analysis moves to the server."""
+        from ..client import credentials
+        from ..client.remote import ServerClient
+
+        url = url.strip().rstrip("/")
+        headers = self.engine.config.remote.headers if headers is None else headers
+        client = ServerClient(url, headers)
+        try:
+            client.health()
+            data = client.redeem(invite, device_name)
+        finally:
+            client.close()
+        data_dir = self.engine.config.engine.data_dir
+        credentials.save(data_dir, credentials.Credentials(url, data["key"], data["device"]["id"],
+                                                           data["device"]["name"], data.get("account") or ""))  # fmt: skip
+        self._save_remote({"mode": "remote", "url": url, "headers": headers, "device_name": device_name})
+        info = self.remote_info()
+        self.publish("remote_changed", remote=info)
+        return info
+
+    def rotate_key(self) -> dict[str, Any]:
+        """A new key for this device; the old one stops working on the server at once."""
+        from ..client import credentials
+        from ..client.backend import client_for
+
+        data_dir = self.engine.config.engine.data_dir
+        creds = credentials.load(data_dir, self.engine.config.remote.url)
+        if creds is None:
+            raise SpeakcheckError("this device isn't connected to a server")
+        client = client_for(self.engine)
+        try:
+            creds.key = client.rotate()
+        finally:
+            client.close()
+        credentials.save(data_dir, creds)
+        self._reset_backend()
+        return self.remote_info(check=False)
+
+    def forget_key(self) -> dict[str, Any]:
+        """Disconnect: revoke this device on the server (if reachable) and delete the local key."""
+        from ..client import credentials
+        from ..client.backend import client_for
+        from ..client.remote import ServerError
+
+        data_dir = self.engine.config.engine.data_dir
+        creds = credentials.load(data_dir)
+        if creds is not None and creds.device_id:
+            client = client_for(self.engine, creds.url)
+            try:
+                client.revoke(creds.device_id)
+            except ServerError:
+                pass  # the key is deleted here either way
+            finally:
+                client.close()
+        credentials.clear(data_dir)
+        changes: dict[str, Any] = {"mode": "local"} if self.engine_installed() else {}
+        self._save_remote(changes)
+        info = self.remote_info(check=False)
+        self.publish("remote_changed", remote=info)
+        return info
+
+    def start_install(self, then_local: bool = True, runner: Callable[..., Any] | None = None) -> dict[str, Any]:
+        """Install the engine on this computer (`speakcheck setup --role full`) in the background."""
+        import subprocess
+        import sys
+
+        from ..install.ollama import find as find_ollama
+
+        if self.install["running"]:
+            raise SpeakcheckError("the engine is already being installed")
+        command = [sys.executable, "-m", "speakcheck.cli", "setup", "--role", "full", "--yes", "--no-launcher"]
+        if self.engine.config.source:
+            command += ["--config", str(self.engine.config.source)]
+        if find_ollama() is None:
+            command.append("--no-ollama")  # installing Ollama may need a password: do that in a terminal
+        self.install.update(running=True, ok=None, log=[])
+        self.publish("install", **self.install)
+        popen = runner or subprocess.Popen
+
+        def run() -> None:
+            ok = False
+            try:
+                proc = popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                for line in proc.stdout:
+                    line = line.rstrip()
+                    self.install["log"].append(line)
+                    self.publish("install_output", line=line)
+                ok = proc.wait() == 0
+            except OSError as e:
+                self.install["log"].append(f"error: {e}")
+            import importlib
+
+            importlib.invalidate_caches()  # the new packages must be found without a restart
+            if ok and then_local and self.engine_installed():
+                path = self._config_path()
+                if path.exists():  # setup wrote the chosen profile there
+                    self.engine.config = load_config(path)
+                self._save_remote({"mode": "local"})
+            self.install.update(running=False, ok=ok)
+            self.publish("install", **{**self.install, "log": self.install["log"][-20:]})
+            self.publish("remote_changed", remote=self.remote_info(check=False))
+
+        threading.Thread(target=run, name="install", daemon=True).start()
+        return self.install
 
     # --- profiles -------------------------------------------------------------------------
 
@@ -315,6 +516,8 @@ class Daemon:
             self.publish("level", level=status["level"], elapsed=status["elapsed"], mode=status["mode"])
             if status["mode"] != "practice":
                 continue
+            if self._backend is not None and self._backend.remote:
+                self._backend.practice_feed(Path(status["path"]))  # stream while the user speaks
             level = status["level"] or 0.0
             cfg = self.engine.config.engine
             if level >= SPEECH_LEVEL:
@@ -351,6 +554,7 @@ class Daemon:
             "recording": self.engine.recording_status(),
             "practice_target": self.practice_target,
             "triggers": {**self.triggers, "bindings": self.engine.config.shortcuts},
+            "engine": {"mode": self.engine.config.remote.mode, "url": self.engine.config.remote.url},
             "pid": os.getpid(),
         }
 
@@ -367,4 +571,5 @@ class Daemon:
             except Exception:  # shutting down anyway
                 pass
         self._worker.shutdown(wait=True, cancel_futures=True)
+        self._reset_backend()
         self.engine.close()

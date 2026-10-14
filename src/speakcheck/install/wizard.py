@@ -31,10 +31,15 @@ from ..engine.errors import SpeakcheckError
 from ..providers.base import Download
 from . import ollama
 from .download import cache_path, plan_downloads
-from .state import InstallState, Runner, SetupError, extras_for, sync
+from .state import ROLES, InstallState, Runner, SetupError, extras_for, sync
 
 SELFTEST_CLIP = Path(__file__).resolve().parent.parent / "data" / "selftest.wav"
 STEPS = 7
+ROLE_CHOICES = [
+    ("full", "On this computer: record and analyze here (downloads the models)"),
+    ("client", "Use a speakcheck server: record here, analyze there (small install, needs an invite)"),
+    ("server", "Server only: analyze for other devices (no app menu entry or microphone)"),
+]
 
 
 class Console:
@@ -45,10 +50,17 @@ class Console:
         # Flushed: subprocesses (uv, downloads) write to the same terminal in between.
         self.say = out or (lambda text="": print(text, flush=True))
         self._step = 0
+        self.total = STEPS
 
     def step(self, title: str) -> None:
         self._step += 1
-        self.say(f"\n[{self._step}/{STEPS}] {title}")
+        self.say(f"\n[{self._step}/{self.total}] {title}")
+
+    def text(self, question: str, default: str = "") -> str:
+        if not self.interactive:
+            return default
+        answer = self._ask(f"{question}{f' [{default}]' if default else ''} ").strip()
+        return answer or default
 
     def confirm(self, question: str, default: bool = True) -> bool:
         if not self.interactive:
@@ -124,6 +136,16 @@ class Setup:
         self.python = sys.executable
 
     # --- steps ----------------------------------------------------------------------------
+
+    def choose_role(self) -> str:
+        state = InstallState.load(self.root)
+        if role := getattr(self.args, "role", None):
+            return role
+        default = state.role or "full"
+        if not self.console.interactive:
+            return default
+        self.console.say("\nHow will you use speakcheck?")
+        return self.console.choose("  Choose", ROLE_CHOICES, default)
 
     def choose_profile(self) -> str:
         say = self.console.say
@@ -213,17 +235,19 @@ class Setup:
                 elif not ollama.pull(d.name, ollama_binary, self.run):
                     self.console.say(f"  ! Downloading {d.name} failed; run `ollama pull {d.name}` later.")
 
-    def launcher(self) -> bool:
-        """App-menu entry and the `speakcheck` command; True if the command is usable."""
+    def launcher(self, menu: bool = True) -> bool:
+        """App-menu entry (unless `menu=False`) and the `speakcheck` command; True if the command is usable."""
         from ..desktop import command_on_path, install_command, install_launcher
 
         say = self.console.say
-        self.console.step("App menu and command")
-        if self.args.no_launcher or not self.console.confirm("  Add speakcheck to your app menu and terminal?"):
+        self.console.step("App menu and command" if menu else "The speakcheck command")
+        question = "  Add speakcheck to your app menu and terminal?" if menu else "  Add the speakcheck command to your terminal?"
+        if self.args.no_launcher or not self.console.confirm(question):
             say("  Skipped (`speakcheck desktop-entry` adds the menu entry later).")
             return False
         try:
-            say(f"  App menu: {install_launcher(self.python)}")
+            if menu:
+                say(f"  App menu: {install_launcher(self.python)}")
             say(f"  Command:  {install_command(self.python)}")
         except (OSError, subprocess.SubprocessError) as e:
             say(f"  ! Couldn't add it: {e}")
@@ -280,9 +304,138 @@ class Setup:
 
     # --- flow -----------------------------------------------------------------------------
 
+    # --- client role ----------------------------------------------------------------------
+
+    def _config(self) -> Config:
+        """The current config, before setup has written config.toml (the template's defaults)."""
+        if self.config_path.exists():
+            return load_config(self.config_path)
+        return load_config(self.template) if self.template.exists() else load_config()
+
+    def set_remote(self, changes: dict) -> None:
+        data_dir = self._config().engine.data_dir
+        stored = load_user_settings(data_dir)
+        stored["remote"] = {**(stored.get("remote") or {}), **changes}
+        save_user_settings(data_dir, stored)
+
+    def server_details(self) -> tuple[str, dict[str, str], str, str]:
+        import socket
+
+        say, ask = self.console.say, self.console.text
+        current = self._config().remote
+        url = getattr(self.args, "server_url", None) or ask("  Server address (e.g. https://speak.example.com):", current.url or "")
+        if not url:
+            raise SetupError("client mode needs the server's address (--server-url)")
+        headers = dict(current.headers)
+        for item in getattr(self.args, "server_header", None) or []:
+            name, sep, value = item.partition("=")
+            if not sep or not name.strip():
+                raise SetupError(f"headers look like Name=value, not {item!r}")
+            headers[name.strip()] = value.strip()
+        if self.console.interactive and not getattr(self.args, "server_header", None):
+            say("  Extra headers, if a proxy in front of the server needs them (Name=value; ${VAR} reads .env).")
+            while item := ask("  Header (empty when done):"):
+                name, _, value = item.partition("=")
+                headers[name.strip()] = value.strip()
+        invite = getattr(self.args, "invite", None) or ""
+        name = getattr(self.args, "device_name", None) or current.device_name or socket.gethostname() or "my computer"
+        return url.strip().rstrip("/"), headers, invite, name
+
+    def run_client(self) -> int:
+        from ..client import credentials
+        from ..client.remote import ServerClient, ServerError, is_insecure
+
+        say = self.console.say
+        self.console.total = 4
+        self.console.step("Your server")
+        url, headers, invite, device = self.server_details()
+        data_dir = self._config().engine.data_dir
+        client = ServerClient(url, headers)
+        try:
+            health = client.health()
+            say(f"  {url}: speakcheck {health['version']}, analyzers: {', '.join(health['analyzers'])}")
+            if is_insecure(url):
+                say("  ! This is plain http: your key and recordings cross the network unencrypted. Use https.")
+            creds = credentials.load(data_dir, url)
+            if not invite and creds is None:
+                invite = self.console.text("  Invite code from the server's admin:")
+            if self.args.dry_run:
+                say("\nDry run: nothing changed.")
+                return 0
+            if invite:
+                data = client.redeem(invite, device)
+                creds = credentials.Credentials(url, data["key"], data["device"]["id"], device, data.get("account") or "")
+                credentials.save(data_dir, creds)
+                say(f"  Connected as '{device}' to the account '{creds.account}'.")
+            elif creds is not None:
+                say(f"  Already connected as '{creds.device_name}' ({creds.account}).")
+            else:
+                raise SetupError("an invite code is needed: ask the server's admin (`speakcheck server invite <account>`)")
+        except ServerError as e:
+            raise SetupError(str(e)) from e
+        finally:
+            client.close()
+
+        self.console.step("Installing")
+        state = InstallState.load(self.root)
+        state.role, state.extras = "client", extras_for(None, "client")
+        if self.args.installed_version:
+            state.version = self.args.installed_version
+        sync(self.root, state.extras, self.run)
+        state.save(self.root)
+        self.set_remote({"mode": "remote", "url": url, "headers": headers, "device_name": device})
+        say("  Analysis will run on the server; recordings and history stay on this computer too.")
+
+        command = "speakcheck" if self.launcher() else "uv run speakcheck"
+        self.console.step("Checking it works")
+        client = ServerClient(url, headers, creds.key)
+        try:
+            account = client.account()
+            say(f"  The server knows this device: account '{account['name']}'.")
+            ok = True
+        except ServerError as e:
+            say(f"  ! {e}")
+            ok = False
+        finally:
+            client.close()
+        say("\nDone." if ok else "\nInstalled, with problems (see above).")
+        say(f"Start speakcheck from your app menu, or with:  {command} serve --open")
+        say("To analyze on this computer instead later: choose it in the page's settings, or run "
+            f"`{command} setup --role full`.")  # fmt: skip
+        return 0 if ok else 1
+
+    # --- server role ----------------------------------------------------------------------
+
+    def first_account(self, command: str) -> None:
+        """Offer to create the first account and an invite, so a device can connect right away."""
+        from ..server.db import Database
+        from ..server.service import server_dir
+
+        config = self._config()
+        db = Database(server_dir(config) / "server.db")
+        try:
+            if db.accounts() or not self.console.interactive:
+                if not db.accounts():
+                    self.console.say(f"Add accounts with:  {command} server accounts add <name>")
+                return
+            if not self.console.confirm("Create the first account now?"):
+                return
+            name = self.console.text("  Account name:", "me")
+            account = db.add_account(name, time.time())
+            code = db.add_invite(account.id, time.time(), 7 * 86400)
+            self.console.say(f"  Invite for '{name}' (one device, valid 7 days):  {code}")
+            self.console.say(f"  More invites:  {command} server invite {name}")
+        finally:
+            db.close()
+
     def run_all(self) -> int:
         say = self.console.say
         say("speakcheck setup")
+        role = self.choose_role()
+        if role not in ROLES:
+            raise SetupError(f"unknown role {role!r}; choose from {', '.join(ROLES)}")
+        if role == "client":
+            return self.run_client()
         name = self.choose_profile()
         profile = profiles.get(name)
         accelerator = self.args.accelerator or profiles.accelerator(profile, self.hw)
@@ -303,7 +456,8 @@ class Setup:
             if ollama_binary is None:
                 self.disable_grammar(config)
         state = InstallState.load(self.root)
-        state.accelerator, state.extras = accelerator, extras_for(accelerator)
+        was_client = state.role == "client"
+        state.accelerator, state.extras, state.role = accelerator, extras_for(accelerator, role), role
         if self.args.installed_version:
             state.version = self.args.installed_version
         sync(self.root, state.extras, self.run)
@@ -312,11 +466,19 @@ class Setup:
         say(f"  Profile '{name}' saved in {self.config_path}")
 
         config = load_config(self.config_path)
+        if was_client and config.remote.mode == "remote" and self.console.confirm(
+                "  Analyze on this computer from now on (instead of on the server)?"):  # fmt: skip
+            self.set_remote({"mode": "local"})
         self.download(config, downloads, ollama_binary)
-        command = "speakcheck" if self.launcher() else "uv run speakcheck"
+        command = "speakcheck" if self.launcher(menu=role != "server") else "uv run speakcheck"
         ok = self.verify(accelerator)
 
         say("\nDone." if ok else "\nInstalled, with problems (see above).")
+        if role == "server":
+            self.first_account(command)
+            say(f"Run the server with:  {command} server serve --host 0.0.0.0   (put HTTPS in front of it)")
+            say(f"Use speakcheck on this computer too, later:  {command} setup --role full")
+            return 0 if ok else 1
         say(f"Start speakcheck from your app menu, or with:  {command} serve --open")
         say(f"Change profile any time:  {command} setup   (or in the page's settings)")
         if ok and self.console.interactive and self.console.confirm("Start speakcheck now?"):

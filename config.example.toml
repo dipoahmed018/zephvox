@@ -129,3 +129,14 @@
 # max_jobs = 2                # waiting or running at once
 # storage_mb = 2048           # synced history
 # requests_per_minute = 120
+
+# --- client mode: analyze on a speakcheck server ------------------------------------------
+# Usually set by `speakcheck setup --role client` or the page's settings (which win over this file).
+# This device's key is kept apart, in remote.json in the data folder.
+
+[remote]
+# mode = "local"              # "remote": analysis runs on the server below
+# url = "https://speak.example.com"
+# headers = { "CF-Access-Client-Id" = "${CF_ID}" }   # for a proxy; ${VAR} is read from .env
+# sync = true                 # back up history to the server (default: on in remote mode)
+# device_name = "my laptop"

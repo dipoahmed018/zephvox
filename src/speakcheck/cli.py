@@ -59,6 +59,13 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--no-launcher", action="store_true", help="don't add an app-menu entry")
     st.add_argument("--no-verify", action="store_true", help="skip the test analysis")
     st.add_argument("--dry-run", action="store_true", help="show what would be installed, change nothing")
+    st.add_argument("--role", choices=["full", "client", "server"],
+                    help="full: analyze here; client: use a server; server: analyze for other devices")  # fmt: skip
+    st.add_argument("--server-url", help="client: the server's address, e.g. https://speak.example.com")
+    st.add_argument("--server-header", action="append", metavar="NAME=VALUE",
+                    help="client: an extra header for every request (repeatable; ${VAR} reads .env)")  # fmt: skip
+    st.add_argument("--invite", help="client: the invite code from the server's admin")
+    st.add_argument("--device-name", help="client: how this device is listed on the server (default: hostname)")
     st.add_argument("--installed-version", help=argparse.SUPPRESS)  # passed by the install script
     up = sub.add_parser("update", parents=[common], help="install the latest release")
     up.add_argument("--force", action="store_true", help="reinstall even if up to date")
@@ -130,6 +137,17 @@ def _via_daemon(url: str, args: argparse.Namespace, ask: Callable[[str], str]) -
     return 0
 
 
+def _analyze(engine: Engine, source, analyzers: list[str] | None):
+    """On this computer, or on the server in client mode."""
+    from .client.backend import make_backend
+
+    backend = make_backend(engine)
+    try:
+        return backend.analyze(source, analyzers)
+    finally:
+        backend.close()
+
+
 def run(args: argparse.Namespace, engine: Engine, ask: Callable[[str], str]) -> int:
     cmd = args.command
     if cmd in DAEMON_COMMANDS:
@@ -161,15 +179,15 @@ def run(args: argparse.Namespace, engine: Engine, ask: Callable[[str], str]) -> 
             ask("Speak now. Press Enter to stop… ")
         finally:
             recording = engine.stop_recording()
-        _emit_report(engine, engine.analyze(recording, _analyzers(args)), args)
+        _emit_report(engine, _analyze(engine, recording, _analyzers(args)), args)
     elif cmd == "start":
         recording = engine.start_recording()
         print(f"Recording into session {recording.session_id}. Run `speakcheck stop` when done.")
     elif cmd == "stop":
         recording = engine.stop_recording()
-        _emit_report(engine, engine.analyze(recording, _analyzers(args)), args)
+        _emit_report(engine, _analyze(engine, recording, _analyzers(args)), args)
     elif cmd == "analyze":
-        _emit_report(engine, engine.analyze(args.file, _analyzers(args)), args)
+        _emit_report(engine, _analyze(engine, args.file, _analyzers(args)), args)
     elif cmd == "report":
         sessions = engine.sessions.list()
         session = engine.sessions.get(args.session) if args.session else (sessions[-1] if sessions else None)
@@ -190,6 +208,21 @@ def run(args: argparse.Namespace, engine: Engine, ask: Callable[[str], str]) -> 
                 print(f"  · {hint}")
     elif cmd == "doctor":
         report = engine.doctor()
+        remote = engine.config.remote
+        report["remote"] = {"mode": remote.mode, "url": remote.url, "sync": remote.syncing}
+        if remote.url:
+            from .client.backend import client_for
+            from .client.remote import ServerError
+
+            client = client_for(engine)
+            try:
+                report["remote"]["server"] = client.health()
+                if client.key:
+                    report["remote"]["account"] = client.account()["name"]
+            except ServerError as e:
+                report["remote"]["error"] = str(e)
+            finally:
+                client.close()
         report["config"] = {
             "file": str(args.config or default_config_path()),
             "env_files": [str(d / ".env") for d in config_dirs() if (d / ".env").exists()],

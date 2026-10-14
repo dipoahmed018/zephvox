@@ -27,7 +27,7 @@ import re
 import sys
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import platformdirs
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -161,6 +161,24 @@ class ServerSettings(BaseModel):
     limits: ServerLimits = Field(default_factory=ServerLimits)
 
 
+class RemoteSettings(BaseModel):
+    """Use a speakcheck server for analysis (client mode), and/or sync history with it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: Literal["local", "remote"] = "local"
+    url: str | None = None
+    # Extra headers for every request, e.g. for a proxy in front of the server. `${VAR}` in a
+    # value is read from the environment (.env), so secrets needn't sit in config.toml.
+    headers: dict[str, str] = Field(default_factory=dict)
+    sync: bool | None = None  # back up history to the server; default: on in remote mode only
+    device_name: str | None = None
+
+    @property
+    def syncing(self) -> bool:
+        return bool(self.url) and (self.sync if self.sync is not None else self.mode == "remote")
+
+
 def _default_providers() -> dict[str, list[str]]:
     linux = sys.platform.startswith("linux")
     return {
@@ -196,6 +214,7 @@ class Config(BaseModel):
     analyzer: dict[str, dict[str, Any]] = Field(default_factory=dict)
     shortcuts: dict[str, str] = Field(default_factory=_default_shortcuts)
     server: ServerSettings = Field(default_factory=ServerSettings)
+    remote: RemoteSettings = Field(default_factory=RemoteSettings)
 
     def provider_settings(self, name: str) -> dict[str, Any]:
         return dict(self.provider.get(name, {}))
@@ -312,7 +331,8 @@ def save_user_settings(data_dir: Path, settings: dict[str, Any]) -> None:
 
 
 def apply_user_settings(config: Config, settings: dict[str, Any]) -> Config:
-    """Supported keys: `capture: {provider, device}`, `tts: {provider, voice}`, `analyzers: [...]`."""
+    """Supported keys: `capture: {provider, device}`, `tts: {provider, voice}`, `analyzers: [...]`,
+    `remote: {mode, url, headers, sync, device_name}`."""
     update: dict[str, Any] = {}
     provider = {k: dict(v) for k, v in config.provider.items()}
     for key, field in (("capture", "device"), ("tts", "voice")):
@@ -326,4 +346,6 @@ def apply_user_settings(config: Config, settings: dict[str, Any]) -> Config:
             update["provider"] = provider
     if settings.get("analyzers"):
         update["engine"] = config.engine.model_copy(update={"analyzers": list(settings["analyzers"])})
+    if isinstance(settings.get("remote"), dict):
+        update["remote"] = RemoteSettings(**{**config.remote.model_dump(), **settings["remote"]})
     return config.model_copy(update=update) if update else config

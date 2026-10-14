@@ -33,8 +33,16 @@ curl -LsSf https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/instal
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.ps1 | iex"
 ```
 
-The script installs [uv](https://docs.astral.sh/uv/) if needed, downloads speakcheck and starts `speakcheck setup`,
-which:
+The script installs [uv](https://docs.astral.sh/uv/) if needed, downloads speakcheck and starts `speakcheck setup`.
+It first asks how you'll use speakcheck:
+
+- **On this computer** (default): everything below.
+- **Use a speakcheck server**: a small install (about 80 MB, no PyTorch or models) that records here
+  and analyzes on a server. You need the server's address and an invite code from its admin; see
+  [Server mode](#server-mode).
+- **Server only**: the engine, for other devices to use. No app menu entry or microphone parts.
+
+For "on this computer", setup:
 
 1. **detects your hardware**: CPU, RAM, GPU and its memory, free disk space;
 2. **recommends a profile** (below). Accept it or pick another;
@@ -274,6 +282,19 @@ speakcheck server serve --host 0.0.0.0                            # put HTTPS (C
 
 Each device redeems an invite for its own key (`POST /v1/devices/redeem`) and sends it as
 `Authorization: Bearer sk_...`. Keys are stored only as hashes and can be rotated or revoked.
+
+**On a device**, choose "use a speakcheck server" in setup, or run it directly:
+
+```sh
+speakcheck setup --role client --server-url https://speak.example.com --invite inv_...
+#   --server-header "CF-Access-Client-Id=${CF_ID}"   if a proxy in front of the server needs headers
+```
+
+The app works as usual: recordings, history and reports stay on the device, and only the analysis
+runs on the server. Practice audio streams to the server while you speak, so the score arrives a
+moment after you stop. In the page's settings ("Where analysis runs") you can switch between the
+server and this computer. Choosing this computer on a client-only install offers to install the
+engine there, in the background. A server-only install adds the app with `speakcheck setup --role full`.
 
 | API | What it does |
 |---|---|

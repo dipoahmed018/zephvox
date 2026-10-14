@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { LICENSE_NAME, SOURCE_URL } from "../about";
 import { api } from "../api";
 import { AnalyzerToggles } from "../components/AnalyzerToggles";
+import { EngineCard } from "../components/EngineCard";
 import { MicSelect } from "../components/MicSelect";
 import { ProfileCard } from "../components/ProfileCard";
 import { VoiceSelect } from "../components/VoiceSelect";
@@ -38,14 +39,20 @@ export function Status() {
 
   const triggers = state.triggers ?? status?.triggers;
   const gpu = status?.doctor.system.gpu;
-  const kinds = Object.keys(KIND_LABELS);
+  const remote = state.engineMode?.mode === "remote";
+  // In client mode the server does the analysis: only this computer's own drivers matter here.
+  const kinds = remote ? ["capture", "triggers"] : Object.keys(KIND_LABELS);
 
   return (
     <>
       <div className="page-head">
         <div>
           <h1>Settings & status</h1>
-          <p>What speakcheck is using on this computer.</p>
+          <p>
+            {state.engineMode?.mode === "remote"
+              ? "This computer records; a speakcheck server does the analysis."
+              : "What speakcheck is using on this computer."}
+          </p>
         </div>
       </div>
       <div className="grid-2">
@@ -116,7 +123,8 @@ export function Status() {
           </div>
         </div>
         <div className="stack">
-          <ProfileCard />
+          <EngineCard />
+          {state.engineMode?.mode !== "remote" && <ProfileCard />}
           <div className="card">
             <div className="card-title">
               <Cpu size={18} color="var(--accent)" />
@@ -163,6 +171,11 @@ export function Status() {
               </table>
             ) : (
               <p className="muted">Checking drivers…</p>
+            )}
+            {remote && (
+              <p className="muted" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
+                Speech recognition, sounds, grammar and voices run on the server.
+              </p>
             )}
             <p className="faint" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
               ★ in use · ✗ unavailable (hover for why). Change drivers in <code>config.toml</code> in the speakcheck
