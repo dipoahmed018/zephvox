@@ -51,6 +51,7 @@ export function Sky({ route, variant, className }: { route: Route; variant: "pan
 
   const rec = state.recording;
   const job = state.job;
+  const waiting = Math.max(0, state.pending - (job ? 1 : 0)); // analyses queued behind the running one
   const practicing = route.view === "practice";
   const target = practicing ? state.practiceTarget?.text ?? null : null;
 
@@ -70,12 +71,15 @@ export function Sky({ route, variant, className }: { route: Route; variant: "pan
 
   const s: SkyState = (() => {
     if (!state.connected) return { mode: "offline", title: "Connecting", detail: "Waiting for the engine…", tone: "off" };
-    if (rec?.mode === "analysis") return { mode: "recording", title: "Recording", detail: fmtDuration(rec.elapsed), tone: "rec" };
+    // Recording again while the last one is still being analyzed is fine: it joins the queue.
+    const behind = state.pending > 0 ? ` · ${state.pending === 1 ? "last one is analyzing" : `${state.pending} analyzing`}` : "";
+    if (rec?.mode === "analysis") return { mode: "recording", title: "Recording", detail: fmtDuration(rec.elapsed) + behind, tone: "rec" };
     if (rec?.mode === "practice")
       return { mode: "recording", title: "Listening", detail: "Stops when you stop talking", tone: "rec" };
     if (job?.name === "analysis") {
       const running = [...job.stages].reverse().find((st) => st.state === "running");
-      return { mode: "analyzing", title: "Analyzing", detail: running ? STAGE_LABELS[running.key] ?? running.key : "Getting ready", tone: "busy" };
+      const step = running ? STAGE_LABELS[running.key] ?? running.key : "Getting ready";
+      return { mode: "analyzing", title: "Analyzing", detail: step + (waiting ? ` · ${waiting} waiting` : ""), tone: "busy" };
     }
     if (job?.name === "practice") return { mode: "analyzing", title: "Scoring", detail: "One moment", tone: "busy" };
     if (attempt) {
@@ -94,7 +98,8 @@ export function Sky({ route, variant, className }: { route: Route; variant: "pan
 
   const gates = job?.name === "analysis" ? gatesFor(job.stages, analyzers) : [];
   const recording = Boolean(rec);
-  const busy = Boolean(job) || !state.connected;
+  // Only a lost connection blocks recording: an analysis in progress never does.
+  const busy = !state.connected;
   const practiceAction = Boolean(target) && !recording;
   const action = recording
     ? { label: "Stop", run: api.stop, shortcut: rec?.mode === "practice" ? "practice_attempt" : "toggle_recording" }

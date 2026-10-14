@@ -60,6 +60,26 @@ describe("gatesFor", () => {
   });
 });
 
+describe("analyses queue behind each other", () => {
+  const send = (s: EngineState, event: string, data: Record<string, unknown> = {}) => reduce(s, { type: "server", event, data });
+
+  it("keeps the running job's progress when another is queued, and counts those waiting", () => {
+    let s = send(initialState, "job_queued", { job: "analysis", pending: 1 });
+    s = send(s, "job_started", { job: "analysis" });
+    s = send(s, "stage_started", { stage: "transcript" });
+    s = send(s, "job_queued", { job: "analysis", pending: 2 }); // recorded again meanwhile
+    expect(s.job?.stages).toEqual([{ key: "transcript", state: "running" }]); // not wiped
+    expect(s.pending).toBe(2);
+    s = send(s, "job_finished", { job: "analysis", pending: 1 });
+    expect(s.job).toBeNull();
+    s = send(s, "job_started", { job: "analysis" });
+    s = send(s, "stage_started", { stage: "transcript" });
+    expect(s.job?.stages).toHaveLength(1); // the second one's progress is shown
+    s = send(s, "job_finished", { job: "analysis", pending: 0 });
+    expect(s.pending).toBe(0);
+  });
+});
+
 describe("analysis failures", () => {
   it("explains a missing grammar model in plain words, with the fix", () => {
     const e = explainError(

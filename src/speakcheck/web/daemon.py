@@ -153,9 +153,12 @@ class Daemon:
     def _submit(self, name: str, fn: Callable[[], Any]) -> Future:
         with self._jobs_lock:
             self._jobs += 1
-        self.publish("job_started", job=name)
+            pending = self._jobs
+        # Jobs run one at a time: "queued" now, "started" when this one actually begins.
+        self.publish("job_queued", job=name, pending=pending)
 
         def run():
+            self.publish("job_started", job=name)
             try:
                 return fn()
             except SpeakcheckError as e:
@@ -167,7 +170,8 @@ class Daemon:
             finally:
                 with self._jobs_lock:
                     self._jobs -= 1
-                self.publish("job_finished", job=name)
+                    pending = self._jobs
+                self.publish("job_finished", job=name, pending=pending)
 
         return self._worker.submit(run)
 

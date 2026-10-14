@@ -77,6 +77,11 @@ export function Home() {
         <section className="surface mb-8 p-5" aria-label="Analyzing">
           <SectionLabel>Analyzing your recording</SectionLabel>
           <ProgressSteps stages={state.job!.stages} />
+          {state.pending > 1 && (
+            <p className="mt-3 mb-0 text-sm text-muted-foreground">
+              {state.pending - 1} more {state.pending === 2 ? "recording is" : "recordings are"} waiting. They're analyzed one after another.
+            </p>
+          )}
         </section>
       )}
 

@@ -29,7 +29,8 @@ export interface EngineState {
   connected: boolean;
   recording: { mode: "analysis" | "practice"; level: number; elapsed: number } | null;
   levels: number[];
-  job: { name: string; stages: Stage[] } | null;
+  job: { name: string; stages: Stage[] } | null; // the one running now
+  pending: number; // jobs not finished yet: the running one plus those waiting behind it
   lastAnalysis: { sessionId: string; seq: number } | null;
   analysisError: string | null; // the last analysis failed; cleared when the next one starts
   lastAttempt: PracticeAttempt | null;
@@ -51,6 +52,7 @@ export const initialState: EngineState = {
   recording: null,
   levels: [],
   job: null,
+  pending: 0,
   lastAnalysis: null,
   analysisError: null,
   lastAttempt: null,
@@ -124,6 +126,8 @@ function reduceServer(state: EngineState, event: string, d: Record<string, any>)
     case "recording_stopped":
     case "recording_cancelled":
       return { ...state, recording: null };
+    case "job_queued":
+      return { ...state, pending: d.pending ?? state.pending + 1 };
     case "job_started":
       return { ...state, job: { name: d.job, stages: [] }, analysisError: d.job === "analysis" ? null : state.analysisError };
     case "stage_started": {
@@ -137,7 +141,7 @@ function reduceServer(state: EngineState, event: string, d: Record<string, any>)
       return { ...state, job: { ...state.job, stages } };
     }
     case "job_finished":
-      return { ...state, job: null };
+      return { ...state, job: null, pending: d.pending ?? Math.max(0, state.pending - 1) };
     case "analysis_done":
       return { ...state, lastAnalysis: { sessionId: d.session_id, seq: (state.lastAnalysis?.seq ?? 0) + 1 } };
     case "practice_result":

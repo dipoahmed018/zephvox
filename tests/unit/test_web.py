@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import json
+import threading
 import time
 from types import SimpleNamespace
 
@@ -102,7 +103,7 @@ class TestDaemonActions:
         assert result.analyzers == ["grammar"] and result.by_analyzer("grammar")
         assert ClosingLLM.closed == 1 and "llm" not in daemon.engine._providers
         assert published(daemon, "analysis_done") == [{"session_id": rec.session_id}]
-        assert [t for t, _ in daemon.published if t.startswith("job_")] == ["job_started", "job_finished"]
+        assert [t for t, _ in daemon.published if t.startswith("job_")] == ["job_queued", "job_started", "job_finished"]
 
     def test_practice_needs_target_then_scores(self, daemon):
         with pytest.raises(SpeakcheckError, match="Pick a word"):
@@ -847,3 +848,31 @@ class TestSharing:
     def test_client_mode_cant_share(self, api, daemon):
         daemon.engine.config.remote.mode = "remote"
         assert "can't share" in api.put("/api/sharing", json={"on": True}).json()["detail"]
+
+
+def test_recording_while_an_analysis_runs_queues_the_next_one(daemon, api, wav_file):
+    # The first analysis is held; the user records again meanwhile. Nothing may block, and the
+    # events must say which job is running and how many wait (the page shows that).
+    gate = threading.Event()
+    real = daemon.backend.analyze
+
+    def slow(source, analyzers=None, **kw):
+        gate.wait(5)
+        return real(source, analyzers, **kw)
+
+    daemon.backend.analyze = slow
+    api.post("/api/record/toggle", json={})  # start
+    api.post("/api/record/toggle", json={})  # stop → analysis 1 starts, held
+    for _ in range(200):
+        if any(t == "job_started" for t, _ in daemon.published):
+            break
+        time.sleep(0.01)
+    assert api.post("/api/record/start", json={}).status_code == 200  # not blocked
+    assert api.post("/api/record/stop").status_code == 200  # → analysis 2 queued behind the first
+    events = [(t, d.get("pending")) for t, d in daemon.published if t.startswith("job_")]
+    assert events == [("job_queued", 1), ("job_started", None), ("job_queued", 2)]
+    gate.set()
+    wait_for_jobs(daemon)
+    assert [(t, d.get("pending")) for t, d in daemon.published if t.startswith("job_")][3:] == [
+        ("job_finished", 1), ("job_started", None), ("job_finished", 0)]  # fmt: skip
+    assert len([t for t, _ in daemon.published if t == "analysis_done"]) == 2
