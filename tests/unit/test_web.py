@@ -313,6 +313,23 @@ class TestAPI:
         assert api.delete(f"/api/sessions/{sid}").json() == {"deleted": sid}
         assert api.get(f"/api/sessions/{sid}").status_code == 404
 
+    def test_a_failed_analysis_is_kept_and_can_run_again(self, api, daemon):
+        # e.g. the profile's grammar model isn't downloaded and grammar is the only check
+        daemon.engine.config.providers["llm"] = ["missing"]
+        api.post("/api/record/toggle", json={"analyzers": ["grammar"]})
+        api.post("/api/record/toggle", json={})
+        wait_for_jobs(daemon)
+        assert "No usable llm provider" in published(daemon, "job_error")[0]["message"]
+        [listed] = api.get("/api/sessions").json()
+        assert listed["unanalyzed"] is True and listed["duration"] > 0 and listed["counts"] == {}
+
+        daemon.engine.config.providers["llm"] = ["fake-llm"]
+        daemon.engine._providers.pop("llm", None)
+        assert api.post(f"/api/sessions/{listed['id']}/analyze", json={"analyzers": ["grammar"]}).json() == {"queued": True}
+        wait_for_jobs(daemon)
+        [again] = api.get("/api/sessions").json()
+        assert again["id"] == listed["id"] and "unanalyzed" not in again
+
     def test_upload_analysis(self, api, daemon, wav_file):
         resp = api.post("/api/analyze", files={"file": ("talk.wav", wav_file.read_bytes())},
                         data={"analyzers": "grammar"})  # fmt: skip

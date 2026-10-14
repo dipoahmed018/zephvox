@@ -49,6 +49,24 @@ def test_no_usable_provider(engine):
     assert "broken-stt: not installed" in str(e.value) and "missing" in str(e.value)
 
 
+def test_a_check_that_cant_run_is_skipped_not_fatal(engine, wav_file):
+    # e.g. the profile's grammar model isn't downloaded: pronunciation still runs.
+    engine.config.providers["llm"] = ["missing"]
+    warnings = []
+    engine.events.subscribe(lambda e: e.type == "warning" and warnings.append(e.data["message"]))
+    result = engine.analyze(wav_file)
+    assert result.analyzers == ["pronunciation"] and result.by_analyzer("pronunciation")
+    assert "llm" not in result.providers
+    assert result.warnings[0].startswith("Grammar was skipped: No usable llm provider")
+    assert warnings == result.warnings
+
+
+def test_nothing_runnable_raises(engine, wav_file):
+    engine.config.providers["llm"] = ["missing"]
+    with pytest.raises(ProviderUnavailable, match="llm"):
+        engine.analyze(wav_file, analyzers=["grammar"])
+
+
 def test_unknown_analyzer(engine, wav_file):
     with pytest.raises(PluginNotFound):
         engine.analyze(wav_file, analyzers=["fluency"])

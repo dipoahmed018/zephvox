@@ -31,7 +31,7 @@ export function Report({ id }: { id?: string }) {
   useEffect(() => {
     if (id) setSessionId(id);
     else run(api.sessions).then((s) => {
-      const done = s?.filter((x) => !x.pending) ?? [];
+      const done = s?.filter((x) => !x.pending && !x.unanalyzed) ?? [];
       if (done.length) setSessionId(done[0].id);
       else setMissing(true);
     });
@@ -152,7 +152,7 @@ export function Report({ id }: { id?: string }) {
       ))}
 
       {result.warnings.length > 0 && (
-        <Collapsible className="surface p-5">
+        <Collapsible className="surface p-5" defaultOpen={result.warnings.some((w) => w.includes("was skipped"))}>
           <CollapsibleTrigger className="flex w-full items-center gap-2 text-left text-sm font-semibold text-muted-foreground">
             <AlertTriangle className="size-4 text-alert-ink" /> {plural(result.warnings.length, "note")} about this analysis
           </CollapsibleTrigger>

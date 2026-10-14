@@ -137,6 +137,12 @@ class UnavailableSTT(STTProvider):
 
 
 @pytest.fixture(autouse=True)
+def _private_data_dir(tmp_path, monkeypatch):
+    """Tests never read or write the real ~/.local/share/speakcheck (settings.json, sessions…)."""
+    monkeypatch.setenv("SPEAKCHECK_HOME", str(tmp_path / "speakcheck-home"))
+
+
+@pytest.fixture(autouse=True)
 def _reset_fakes():
     FakeSTT.calls = 0
     FakePhonemes.calls = 0

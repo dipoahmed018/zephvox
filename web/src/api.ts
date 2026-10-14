@@ -63,6 +63,7 @@ export const api = {
   sessions: () => request<SessionSummary[]>("GET", "/api/sessions"),
   session: (id: string) => request<{ result: AnalysisResult; feedback: Feedback }>("GET", `/api/sessions/${id}`),
   deleteSession: (id: string) => request<unknown>("DELETE", `/api/sessions/${id}`),
+  reanalyze: (id: string, analyzers?: string[]) => request<unknown>("POST", `/api/sessions/${id}/analyze`, { analyzers }),
   feedback: (id: string, index: number, verdict: string | null) =>
     request<Feedback>("POST", `/api/sessions/${id}/findings/${index}/feedback`, { verdict }),
 

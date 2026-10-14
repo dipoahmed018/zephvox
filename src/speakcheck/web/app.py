@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import tempfile
+import wave
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -206,16 +207,23 @@ def create_app(daemon: Daemon) -> FastAPI:
         from ..client.sync import pending
 
         out = []
+        recording = engine.recording_status()
+        busy = {daemon.analyzing, recording and recording.get("session_id")}
         for session in reversed(engine.sessions.list()):
             result = engine.sessions.load_result(session)
             if result is None:
+                if session.id in busy or not session.audio_path.exists():
+                    continue
+                try:
+                    created = datetime.strptime(session.id[:15], "%Y%m%d-%H%M%S").isoformat()
+                except ValueError:
+                    created = session.id
                 if pending(session) is not None:  # recorded while the server was unreachable
-                    try:
-                        created = datetime.strptime(session.id[:15], "%Y%m%d-%H%M%S").isoformat()
-                    except ValueError:
-                        created = session.id
                     out.append({"id": session.id, "created": created, "duration": None, "counts": {},
                                 "preview": "Waiting for the server…", "pending": True})  # fmt: skip
+                else:  # the analysis failed (e.g. a model was missing): the recording is kept
+                    out.append({"id": session.id, "created": created, "duration": _wav_seconds(session.audio_path),
+                                "counts": {}, "preview": "", "unanalyzed": True})  # fmt: skip
                 continue
             feedback = engine.sessions.load_feedback(session)
             counts: dict[str, int] = {}
@@ -317,3 +325,12 @@ def create_app(daemon: Daemon) -> FastAPI:
                     "<p>The API is running: <a href='/api/docs'>/api/docs</a></p>")  # fmt: skip
 
     return app
+
+
+def _wav_seconds(path: Path) -> float | None:
+    """Length of a WAV file from its header (cheap: no decoding)."""
+    try:
+        with wave.open(str(path)) as w:
+            return round(w.getnframes() / w.getframerate(), 2)
+    except (OSError, wave.Error, ZeroDivisionError):
+        return None

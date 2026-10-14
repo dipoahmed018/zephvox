@@ -110,6 +110,7 @@ class Daemon:
         self.practice_target: dict[str, Any] | None = load_user_settings(engine.config.engine.data_dir).get("practice_target")
         self.notify = Notifier(engine.config.engine.notifications)
         self._shortcut_pending: set[str] = set()  # "analysis" / "practice": announce the result
+        self.analyzing: str | None = None  # session being analyzed right now
         self._backend: Any = None  # LocalBackend | RemoteBackend, built on first use
         self._backend_lock = threading.Lock()
         self._sync: Any = None  # SyncWorker while a server is connected
@@ -245,9 +246,10 @@ class Daemon:
         self._announce_practice(attempt)
         return attempt
 
-    def _analyze(self, recording: Recording | Session, analyzers: list[str] | None):
+    def _analyze(self, recording: Recording | Session | Path, analyzers: list[str] | None):
         from ..client.remote import QueuedOffline
 
+        self.analyzing = getattr(recording, "session_id", None) or getattr(recording, "id", None)
         try:
             result = self.backend.analyze(recording, analyzers)
         except QueuedOffline as e:
@@ -255,6 +257,14 @@ class Daemon:
             self.publish("sessions_changed")
             self.sync_soon()
             return None
+        except SpeakcheckError as e:
+            if "analysis" in self._shortcut_pending:
+                self._shortcut_pending.discard("analysis")
+                self.notify("Couldn't analyze your recording", str(e))
+            self.publish("sessions_changed")  # it's kept, and listed as not analyzed
+            raise
+        finally:
+            self.analyzing = None
         self.publish("analysis_done", session_id=result.session_id)
         self._announce_analysis(result)
         self.sync_soon()

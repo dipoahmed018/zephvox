@@ -1,6 +1,7 @@
 import { ArrowRight, AudioLines, FileAudio, Upload } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { AnalysisFailed } from "@/components/AnalysisFailed";
 import { Button } from "@/components/ui/button";
 import { EmptyState, PageHead, SectionLabel } from "@/components/PageHead";
 import { ProgressSteps } from "@/components/ProgressSteps";
@@ -48,7 +49,8 @@ export function Home() {
 
   const upload = (file: File | undefined) => file && run(() => api.upload(file, analyzers));
   const analyzing = state.job?.name === "analysis";
-  const done = sessions?.filter((s) => !s.pending) ?? [];
+  const done = sessions?.filter((s) => !s.pending && !s.unanalyzed) ?? [];
+  const failed = sessions?.[0]?.unanalyzed ? sessions[0] : null;
   const waiting = sessions?.filter((s) => s.pending).length ?? 0;
   const [last, ...recent] = done;
 
@@ -63,6 +65,13 @@ export function Home() {
           "Press record in the sky and talk for a minute or two. When you stop, speakcheck finds what to work on."
         )}
       </PageHead>
+
+      {!analyzing && !state.recording && (state.analysisError || failed) && (
+        <AnalysisFailed
+          message={state.analysisError ?? undefined}
+          onRetry={failed ? () => run(() => api.reanalyze(failed.id)) : undefined}
+        />
+      )}
 
       {analyzing && (
         <section className="surface mb-8 p-5" aria-label="Analyzing">

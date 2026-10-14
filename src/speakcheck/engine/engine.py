@@ -6,6 +6,7 @@ import json
 import threading
 import time
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -240,6 +241,28 @@ class Engine:
     def _analyzers(self, names: list[str]) -> list[Analyzer]:
         return [self.registry.get("analyzers", n)(self.config.analyzer_settings(n)) for n in names]
 
+    def _usable(self, instances: list[Analyzer], provided: tuple[str, ...], warn: Callable[[str], None]) -> list[Analyzer]:
+        """The analyzers whose providers all resolve (done up front, before any heavy work).
+
+        A check that can't run is skipped with a warning, so a missing grammar model doesn't stop
+        the pronunciation check. If nothing can run, the first problem is raised."""
+        usable: list[Analyzer] = []
+        problems: list[tuple[Analyzer, ProviderUnavailable]] = []
+        for analyzer in instances:
+            kinds = plan([(analyzer.needs, analyzer.uses)], self.artifacts, provided=provided).provider_kinds
+            try:
+                for kind in kinds:
+                    self.provider(kind)
+            except ProviderUnavailable as e:
+                problems.append((analyzer, e))
+            else:
+                usable.append(analyzer)
+        if not usable and problems:
+            raise problems[0][1]
+        for analyzer, e in problems:
+            warn(f"{analyzer.name.capitalize()} was skipped: {e}")
+        return usable
+
     def analyze(
         self,
         source: Session | Recording | Path | str,
@@ -265,12 +288,16 @@ class Engine:
         if reference_text is not None:
             initial["transcript"] = transcript_from_text(reference_text, audio.duration(samples))
 
+        warnings: list[str] = []
+
+        def warn(message: str) -> None:
+            warnings.append(message)
+            self.events.emit("warning", message=message)
+
         names = analyzers or self.config.engine.analyzers
-        instances = self._analyzers(names)
+        instances = self._usable(self._analyzers(names), tuple(initial), warn)
+        names = [a.name for a in instances]
         the_plan = plan([(a.needs, a.uses) for a in instances], self.artifacts, provided=tuple(initial))
-        # Resolve every provider up front so we fail before any heavy work.
-        for kind in the_plan.provider_kinds:
-            self.provider(kind)
 
         store = ArtifactStore(
             self.artifacts,
@@ -281,12 +308,6 @@ class Engine:
         )
         for key in the_plan.artifacts:
             store.get(key)
-
-        warnings: list[str] = []
-
-        def warn(message: str) -> None:
-            warnings.append(message)
-            self.events.emit("warning", message=message)
 
         findings = []
         for analyzer in instances:

@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { api } from "@/api";
 import { STAGE_LABELS, useAction, useEngine } from "@/engine";
 import { fmtDuration } from "@/format";
+import { explainError } from "@/lib/errors";
 import { gatesFor } from "@/lib/stages";
 import { setTheme, useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -87,6 +88,7 @@ export function Sky({ route, variant, className }: { route: Route; variant: "pan
       };
     }
     if (target) return { mode: "idle", title: "Ready", detail: `Say “${target}”`, tone: "idle" };
+    if (state.analysisError) return { mode: "idle", title: "Couldn't analyze", detail: explainError(state.analysisError).title, tone: "bad" };
     return { mode: "idle", title: "Ready", detail: state.triggers?.active ? "Record from any app" : "Press record to start", tone: "idle" };
   })();
 

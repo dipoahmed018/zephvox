@@ -1,4 +1,4 @@
-import { ArrowRight, CloudOff, History as HistoryIcon, Trash2 } from "lucide-react";
+import { ArrowRight, CloudOff, History as HistoryIcon, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ export function History() {
             <li key={s.id} className="flex items-center gap-2 pr-3">
               <button
                 type="button"
-                disabled={s.pending}
+                disabled={s.pending || s.unanalyzed}
                 onClick={() => navigate("report", s.id)}
                 className="group flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-2 px-5 py-4 text-left transition-colors hover:bg-accent disabled:cursor-default disabled:hover:bg-transparent"
               >
@@ -58,11 +58,15 @@ export function History() {
                   <span className="block font-semibold">{fmtDate(s.created)}</span>
                   <span className="block text-sm text-muted-foreground tabular-nums">{fmtDuration(s.duration ?? 0)}</span>
                 </span>
-                <span className="min-w-0 flex-1 basis-48 truncate text-muted-foreground">{s.preview || "…"}</span>
+                <span className="min-w-0 flex-1 basis-48 truncate text-muted-foreground">
+                  {s.unanalyzed ? "The analysis didn't finish. The recording is kept." : s.preview || "…"}
+                </span>
                 {s.pending ? (
                   <Badge variant="muted" title="Recorded while the server was unreachable">
                     <CloudOff /> Waiting for the server
                   </Badge>
+                ) : s.unanalyzed ? (
+                  <Badge variant="alert">Not analyzed</Badge>
                 ) : (
                   <span className="flex items-center gap-1.5">
                     <Badge variant={s.counts.pronunciation ? "alert" : "muted"}>{plural(s.counts.pronunciation ?? 0, "sound")}</Badge>
@@ -71,6 +75,11 @@ export function History() {
                   </span>
                 )}
               </button>
+              {s.unanalyzed && (
+                <Button size="sm" variant="outline" disabled={Boolean(state.job)} onClick={() => run(() => api.reanalyze(s.id))}>
+                  <RotateCcw /> Analyze
+                </Button>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button variant="ghost" size="icon" aria-label={`Delete the recording from ${fmtDate(s.created)}`} onClick={() => setDeleting(s)}>

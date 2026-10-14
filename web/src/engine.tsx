@@ -31,6 +31,7 @@ export interface EngineState {
   levels: number[];
   job: { name: string; stages: Stage[] } | null;
   lastAnalysis: { sessionId: string; seq: number } | null;
+  analysisError: string | null; // the last analysis failed; cleared when the next one starts
   lastAttempt: PracticeAttempt | null;
   practiceTarget: { text: string; session_id: string | null } | null;
   triggers: Triggers | null;
@@ -48,6 +49,7 @@ export const initialState: EngineState = {
   levels: [],
   job: null,
   lastAnalysis: null,
+  analysisError: null,
   lastAttempt: null,
   practiceTarget: null,
   triggers: null,
@@ -100,7 +102,12 @@ export function reduce(state: EngineState, action: Action): EngineState {
 function reduceServer(state: EngineState, event: string, d: Record<string, any>): EngineState {
   switch (event) {
     case "recording_started":
-      return { ...state, recording: { mode: d.mode, level: 0, elapsed: 0 }, levels: [] };
+      return {
+        ...state,
+        recording: { mode: d.mode, level: 0, elapsed: 0 },
+        levels: [],
+        analysisError: d.mode === "analysis" ? null : state.analysisError,
+      };
     case "level":
       if (!state.recording) return state;
       return {
@@ -112,7 +119,7 @@ function reduceServer(state: EngineState, event: string, d: Record<string, any>)
     case "recording_cancelled":
       return { ...state, recording: null };
     case "job_started":
-      return { ...state, job: { name: d.job, stages: [] } };
+      return { ...state, job: { name: d.job, stages: [] }, analysisError: d.job === "analysis" ? null : state.analysisError };
     case "stage_started": {
       if (!state.job || d.stage === "samples") return state;
       const stages = state.job.stages.filter((s) => s.key !== d.stage);
@@ -146,6 +153,8 @@ function reduceServer(state: EngineState, event: string, d: Record<string, any>)
       return { ...state, install: { running: true, ok: null, ...state.install, log } };
     }
     case "job_error":
+      // A failed analysis gets its own card on Home and in the sky; other jobs get a notice.
+      return d.job === "analysis" ? { ...state, analysisError: d.message } : addNotice(state, "error", d.message);
     case "action_error":
       return addNotice(state, "error", d.message);
     case "warning":

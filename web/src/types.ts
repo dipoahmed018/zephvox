@@ -40,6 +40,7 @@ export interface SessionSummary {
   counts: Record<string, number>;
   preview: string;
   pending?: boolean; // recorded while the server was unreachable
+  unanalyzed?: boolean; // kept, but the analysis failed (e.g. a model was missing)
 }
 
 export interface SyncStatus {
