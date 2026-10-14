@@ -1,0 +1,245 @@
+"""HTTP API + static React app for the daemon. Everything here is a thin layer over `Daemon`."""
+
+from __future__ import annotations
+
+import asyncio
+import io
+import tempfile
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from ..engine import audio
+from ..engine.errors import ProviderUnavailable, RecordingError, SpeakcheckError
+from ..engine.models import SAMPLE_RATE
+from ..providers.base import CaptureProvider
+from .daemon import Daemon, jsonable
+
+STATIC_DIR = Path(__file__).parent / "static"
+CLIP_PAD_S = 0.15
+KEEPALIVE_S = 15.0
+
+
+class RecordBody(BaseModel):
+    mode: str = "analysis"
+    analyzers: list[str] | None = None
+
+
+class FeedbackBody(BaseModel):
+    verdict: str | None = "dismissed"
+
+
+class TargetBody(BaseModel):
+    text: str | None = None
+    session_id: str | None = None
+
+
+class SettingsBody(BaseModel):
+    capture: dict[str, Any] | None = None
+    analyzers: list[str] | None = None
+
+
+def _wav_bytes(samples) -> bytes:
+    buf = io.BytesIO()
+    audio.write_wav(buf, samples)
+    return buf.getvalue()
+
+
+def create_app(daemon: Daemon) -> FastAPI:
+    app = FastAPI(title="speakcheck", docs_url="/api/docs", openapi_url="/api/openapi.json")
+    engine = daemon.engine
+
+    def session_or_404(sid: str):
+        try:
+            return engine.sessions.get(sid)
+        except SpeakcheckError:
+            raise HTTPException(404, f"No session {sid!r}") from None
+
+    def guard(fn, *args, **kwargs):
+        """Engine errors → 409 with a readable message."""
+        try:
+            return fn(*args, **kwargs)
+        except (RecordingError, ProviderUnavailable, SpeakcheckError) as e:
+            raise HTTPException(409, str(e)) from None
+
+    # --- live events ----------------------------------------------------------------------
+
+    @app.get("/api/events")
+    async def events(request: Request):
+        queue = daemon.hub.subscribe(asyncio.get_running_loop())
+
+        async def stream():
+            try:
+                yield "retry: 2000\n\n"
+                while not await request.is_disconnected():
+                    try:
+                        message = await asyncio.wait_for(queue.get(), KEEPALIVE_S)
+                        yield f"data: {message}\n\n"
+                    except TimeoutError:
+                        yield ": keepalive\n\n"
+            finally:
+                daemon.hub.unsubscribe(queue)
+
+        return StreamingResponse(stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})  # fmt: skip
+
+    # --- status & settings ------------------------------------------------------------------
+
+    @app.get("/api/status")
+    def status():
+        return jsonable({**daemon.status(), "doctor": engine.doctor()})
+
+    @app.get("/api/settings")
+    def get_settings():
+        return daemon.settings()
+
+    @app.put("/api/settings")
+    def put_settings(body: SettingsBody):
+        return guard(daemon.update_settings, body.model_dump(exclude_none=True))
+
+    @app.get("/api/devices")
+    def devices():
+        capture = guard(engine.provider, "capture")
+        assert isinstance(capture, CaptureProvider)
+        return {
+            "provider": capture.name,
+            "selected": capture.settings.model_dump().get("device"),
+            "devices": jsonable(capture.list_devices()),
+        }
+
+    # --- recording (same actions as the shortcuts) ------------------------------------------
+
+    @app.post("/api/record/start")
+    def record_start(body: RecordBody):
+        return jsonable(guard(daemon.start, body.mode, body.analyzers))
+
+    @app.post("/api/record/stop")
+    def record_stop():
+        return jsonable(guard(daemon.stop))
+
+    @app.post("/api/record/cancel")
+    def record_cancel():
+        return jsonable(guard(daemon.cancel))
+
+    @app.post("/api/record/toggle")
+    def record_toggle(body: RecordBody):
+        return jsonable(guard(daemon.toggle, body.mode, body.analyzers))
+
+    @app.post("/api/analyze")
+    async def analyze_upload(file: UploadFile = File(...), analyzers: str | None = Form(None)):
+        suffix = Path(file.filename or "upload").suffix or ".bin"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp.write(await file.read())
+        names = [a for a in (analyzers or "").split(",") if a] or None
+        daemon.analyze_file(Path(tmp.name), names)
+        return {"queued": True}
+
+    # --- sessions ----------------------------------------------------------------------------
+
+    @app.get("/api/sessions")
+    def sessions():
+        out = []
+        for session in reversed(engine.sessions.list()):
+            result = engine.sessions.load_result(session)
+            if result is None:
+                continue
+            feedback = engine.sessions.load_feedback(session)
+            counts: dict[str, int] = {}
+            for i, f in enumerate(result.findings):
+                if feedback.get(i) != "dismissed":
+                    counts[f.analyzer] = counts.get(f.analyzer, 0) + 1
+            out.append({
+                "id": session.id, "created": result.created, "duration": result.duration,
+                "counts": counts, "preview": (result.sentences[0] if result.sentences else ""),
+            })  # fmt: skip
+        return out
+
+    @app.get("/api/sessions/{sid}")
+    def session_detail(sid: str):
+        session = session_or_404(sid)
+        result = engine.sessions.load_result(session)
+        if result is None:
+            raise HTTPException(404, "This session has not been analyzed yet")
+        return {"result": result.to_dict(), "feedback": engine.sessions.load_feedback(session)}
+
+    @app.delete("/api/sessions/{sid}")
+    def session_delete(sid: str):
+        engine.sessions.delete(session_or_404(sid))
+        return {"deleted": sid}
+
+    @app.get("/api/sessions/{sid}/audio")
+    def session_audio(sid: str, start: float | None = None, end: float | None = None):
+        session = session_or_404(sid)
+        samples = audio.decode(session.audio_path)
+        if start is not None and end is not None:
+            samples = audio.slice_seconds(samples, start, end, pad=CLIP_PAD_S, sample_rate=SAMPLE_RATE)
+        return Response(_wav_bytes(samples), media_type="audio/wav")
+
+    @app.post("/api/sessions/{sid}/findings/{index}/feedback")
+    def finding_feedback(sid: str, index: int, body: FeedbackBody):
+        session = session_or_404(sid)
+        result = engine.sessions.load_result(session)
+        if result is None or not 0 <= index < len(result.findings):
+            raise HTTPException(404, "No such finding")
+        return engine.sessions.set_feedback(session, index, body.verdict)
+
+    # --- practice ----------------------------------------------------------------------------
+
+    @app.put("/api/practice/target")
+    def practice_target(body: TargetBody):
+        daemon.set_practice_target(body.text, body.session_id)
+        return {"target": daemon.practice_target}
+
+    @app.get("/api/practice/weak")
+    def practice_weak(limit: int = 20):
+        return engine.weak_words(limit)
+
+    @app.get("/api/practice/stats")
+    def practice_stats(target: str):
+        return engine.practice_store.stats(target)
+
+    @app.get("/api/practice/attempts/latest/audio")
+    def practice_latest_audio(target: str):
+        attempts = engine.practice_store.attempts(target)
+        path = Path(attempts[-1].audio) if attempts and attempts[-1].audio else None
+        if path is None or not path.exists() or path.parent != engine.practice_store.audio_dir:
+            raise HTTPException(404, "No attempt audio")
+        return Response(path.read_bytes(), media_type="audio/wav")
+
+    @lru_cache(maxsize=256)
+    def synthesize(text: str) -> bytes:
+        return engine.provider("tts").synthesize(text)
+
+    @app.get("/api/tts")
+    def tts(text: str):
+        if not text.strip() or len(text) > 300:
+            raise HTTPException(400, "Text must be 1–300 characters")
+        try:
+            return Response(synthesize(text.strip()), media_type="audio/wav")
+        except ProviderUnavailable as e:
+            raise HTTPException(404, str(e)) from None
+        except SpeakcheckError as e:
+            raise HTTPException(502, str(e)) from None
+
+    @app.get("/api/history")
+    def history(limit: int = 15):
+        return engine.history(limit)
+
+    # --- the React app -----------------------------------------------------------------------
+
+    if (STATIC_DIR / "index.html").exists():
+        app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+    else:
+
+        @app.get("/", response_class=HTMLResponse)
+        def missing_frontend():
+            return ("<h1>speakcheck</h1><p>The web page hasn't been built yet. Run "
+                    "<code>cd web &amp;&amp; npm install &amp;&amp; npm run build</code>.</p>"
+                    "<p>The API is running: <a href='/api/docs'>/api/docs</a></p>")  # fmt: skip
+
+    return app

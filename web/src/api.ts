@@ -1,0 +1,102 @@
+import type {
+  AnalysisResult,
+  Device,
+  Feedback,
+  History,
+  PracticeStats,
+  Recording,
+  SessionSummary,
+  Settings,
+  Status,
+  WeakWord,
+} from "./types";
+
+export class ApiError extends Error {}
+
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const resp = await fetch(path, {
+    method,
+    headers: body === undefined ? undefined : { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    let detail = resp.statusText;
+    try {
+      detail = (await resp.json()).detail ?? detail;
+    } catch {
+      /* not JSON */
+    }
+    throw new ApiError(detail);
+  }
+  return resp.json() as Promise<T>;
+}
+
+export const api = {
+  status: () => request<Status>("GET", "/api/status"),
+  settings: () => request<Settings>("GET", "/api/settings"),
+  saveSettings: (changes: Partial<Pick<Settings, "capture" | "analyzers">>) =>
+    request<Settings>("PUT", "/api/settings", changes),
+  devices: () => request<{ provider: string; selected: string | null; devices: Device[] }>("GET", "/api/devices"),
+
+  start: (mode: "analysis" | "practice", analyzers?: string[]) =>
+    request<Recording>("POST", "/api/record/start", { mode, analyzers }),
+  stop: () => request<Recording>("POST", "/api/record/stop"),
+  cancel: () => request<Recording>("POST", "/api/record/cancel"),
+  toggle: (mode: "analysis" | "practice", analyzers?: string[]) =>
+    request<Recording>("POST", "/api/record/toggle", { mode, analyzers }),
+  upload: async (file: File, analyzers: string[]) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("analyzers", analyzers.join(","));
+    const resp = await fetch("/api/analyze", { method: "POST", body: form });
+    if (!resp.ok) throw new ApiError((await resp.json()).detail ?? resp.statusText);
+  },
+
+  sessions: () => request<SessionSummary[]>("GET", "/api/sessions"),
+  session: (id: string) => request<{ result: AnalysisResult; feedback: Feedback }>("GET", `/api/sessions/${id}`),
+  deleteSession: (id: string) => request<unknown>("DELETE", `/api/sessions/${id}`),
+  feedback: (id: string, index: number, verdict: string | null) =>
+    request<Feedback>("POST", `/api/sessions/${id}/findings/${index}/feedback`, { verdict }),
+
+  setPracticeTarget: (text: string | null, sessionId?: string | null) =>
+    request<unknown>("PUT", "/api/practice/target", { text, session_id: sessionId ?? null }),
+  weakWords: () => request<WeakWord[]>("GET", "/api/practice/weak"),
+  practiceStats: (target: string) =>
+    request<PracticeStats>("GET", `/api/practice/stats?target=${encodeURIComponent(target)}`),
+  history: () => request<History>("GET", "/api/history"),
+};
+
+export const urls = {
+  clip: (sessionId: string, start?: number, end?: number) =>
+    `/api/sessions/${sessionId}/audio` + (start !== undefined && end !== undefined ? `?start=${start}&end=${end}` : ""),
+  tts: (text: string) => `/api/tts?text=${encodeURIComponent(text)}`,
+  latestAttempt: (target: string) =>
+    `/api/practice/attempts/latest/audio?target=${encodeURIComponent(target)}&t=${Date.now()}`,
+};
+
+// One shared player so starting a sound stops the previous one.
+let player: HTMLAudioElement | null = null;
+
+export async function play(url: string): Promise<void> {
+  player?.pause();
+  player = new Audio(url);
+  await player.play();
+}
+
+/** Reference pronunciation: engine TTS, falling back to the browser's own voice. */
+export async function speak(text: string): Promise<void> {
+  try {
+    const resp = await fetch(urls.tts(text));
+    if (!resp.ok) throw new ApiError("no tts");
+    const blob = await resp.blob();
+    await play(URL.createObjectURL(blob));
+  } catch {
+    if ("speechSynthesis" in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "en-US";
+      utterance.rate = 0.85;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+    }
+  }
+}

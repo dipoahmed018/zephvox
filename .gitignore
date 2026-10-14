@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Frontend
+web/node_modules/
+
+# Local leftovers
+test-results.txt
+
+# Synthesized test audio (regenerate with scripts/make_fixtures.py)
+tests/fixtures/*.wav
