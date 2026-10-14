@@ -121,6 +121,7 @@ class Daemon:
         if start_triggers and engine.config.server.share:  # turned on earlier: serve again
             threading.Thread(target=self._start_sharing_quietly, name="sharing-start", daemon=True).start()
         self._shortcut_pending: set[str] = set()  # "analysis" / "practice": announce the result
+        self.request_shutdown: Callable[[], None] | None = None  # set by `serve`: stops the web server
         self.analyzing: str | None = None  # session being analyzed right now
         self.waiting: list[str] = []  # sessions queued behind it, oldest first
         self._backend: Any = None  # LocalBackend | RemoteBackend, built on first use

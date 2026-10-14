@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import tempfile
+import threading
 import wave
 from datetime import datetime
 from pathlib import Path
@@ -208,6 +209,16 @@ def create_app(daemon: Daemon) -> FastAPI:
     @app.post("/api/models/pull")
     def pull_model(body: ModelBody):
         return guard(daemon.pull_model, body.name)
+
+    @app.post("/api/quit")
+    def quit_app(request: Request):
+        """Stop this zephvox (`zephvox quit`, and `zephvox update` before it swaps files)."""
+        if request.headers.get("x-requested-with") != "zephvox":
+            raise HTTPException(403, "this has to come from the zephvox command")
+        if daemon.request_shutdown is None:
+            raise HTTPException(409, "this zephvox wasn't started with `zephvox serve`")
+        threading.Timer(0.2, daemon.request_shutdown).start()  # let this answer go out first
+        return {"quitting": True}
 
     @app.get("/api/voices")
     def voices():

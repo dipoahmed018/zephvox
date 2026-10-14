@@ -133,7 +133,8 @@ machine.
 |---|---|
 | `zephvox serve --open` | start zephvox (or use the app-menu entry) |
 | `zephvox setup` | review the profile, repair the install; `--dry-run` only shows the plan |
-| `zephvox update` | install the latest release, keeping your settings |
+| `zephvox update` | install the latest release, keeping your settings. If zephvox is running it is stopped first and started again afterwards (`--no-restart` to leave it stopped) |
+| `zephvox quit` | stop the running zephvox |
 | `zephvox uninstall` | remove it (asks before deleting models or your recordings) |
 
 Unattended install: `curl … | sh -s -- --profile cpu --yes` (Windows: set
@@ -259,6 +260,7 @@ Frontend development: `cd web && npm install && npm run dev` (Vite proxies `/api
 | `zephvox history` | your most frequent mistakes across sessions |
 | `zephvox providers` | which drivers are available, and which is selected |
 | `zephvox serve` | daemon + web GUI + global shortcuts |
+| `zephvox quit` | stop the running daemon (from any terminal; waits for an analysis in progress) |
 | `zephvox desktop-entry` | add zephvox to the app menu (Linux: also gives its shortcuts a proper name) |
 | `zephvox toggle` / `zephvox practice` | start/stop a recording or practice attempt (uses the daemon when it runs) |
 

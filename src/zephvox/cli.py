@@ -70,6 +70,8 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--installed-version", help=argparse.SUPPRESS)  # passed by the install script
     up = sub.add_parser("update", parents=[common], help="install the latest release")
     up.add_argument("--force", action="store_true", help="reinstall even if up to date")
+    up.add_argument("--no-restart", action="store_true", help="don't start zephvox again afterwards if it was running")
+    sub.add_parser("quit", parents=[common], help="stop the running zephvox")
     un = sub.add_parser("uninstall", parents=[common], help="remove zephvox (asks about models and recordings)")
     un.add_argument("-y", "--yes", action="store_true", help="remove without asking (keeps models and recordings)")
     sub.add_parser("providers", parents=[common], help="list providers and whether they can run here")
@@ -256,6 +258,16 @@ def main(argv: list[str] | None = None, engine_factory: EngineFactory = Engine,
         config = load_config(args.config).with_overrides(args.set)
         if args.command == "server":
             return server_cli.run(args, config, ask)
+        if args.command == "quit":
+            from .web.client import DaemonError, stop_daemon
+
+            try:
+                url = stop_daemon(config.engine.data_dir)
+            except DaemonError as e:
+                print(f"error: {e}", file=sys.stderr)
+                return 2
+            print("zephvox stopped." if url else "zephvox isn't running.")
+            return 0
         engine = engine_factory(config)
         if not args.quiet:
             engine.events.subscribe(_progress)

@@ -483,21 +483,32 @@ class TestClientAndCLI:
     def test_server_lifecycle(self, engine, registry, monkeypatch):
         registry.register("triggers", "fake-triggers", FakeTriggers)
         engine.config.providers["triggers"] = ["fake-triggers"]
-        ran, opened = {}, []
-
-        def fake_run(app, host, port, log_level):
-            ran.update(host=host, port=port)
-            assert web_client.daemon_file(engine.config.engine.data_dir).exists()
+        ran, opened, daemons = {}, [], []
 
         import uvicorn
 
-        monkeypatch.setattr(uvicorn, "run", fake_run)
+        import zephvox.web.app as web_app
+
+        real_create = web_app.create_app
+        monkeypatch.setattr(web_app, "create_app", lambda d: (daemons.append(d), real_create(d))[1])
+
+        class FakeWeb:
+            def __init__(self, config):
+                self.config, self.should_exit = config, False
+
+            def run(self):
+                ran.update(host=self.config.host, port=self.config.port)
+                assert web_client.daemon_file(engine.config.engine.data_dir).exists()
+                daemons[0].request_shutdown()  # what `zephvox quit` (POST /api/quit) ends up calling
+                ran["asked_to_stop"] = self.should_exit
+
+        monkeypatch.setattr(uvicorn, "Server", FakeWeb)
         monkeypatch.setattr(web_server.threading, "Timer", lambda d, fn, args: SimpleNamespace(
             start=lambda: opened.append(args[0])))  # fmt: skip
         monkeypatch.setattr(web_server, "daemon_at", lambda url: False)
         monkeypatch.setattr(web_server, "port_free", lambda host, port: True)
         web_server.serve(engine, host="0.0.0.0", port=9001, open_browser=True, shortcuts=False)
-        assert ran == {"host": "0.0.0.0", "port": 9001} and opened == ["http://127.0.0.1:9001"]
+        assert ran == {"host": "0.0.0.0", "port": 9001, "asked_to_stop": True} and opened == ["http://127.0.0.1:9001"]
         assert not web_client.daemon_file(engine.config.engine.data_dir).exists()
 
     def test_serve_hands_over_to_a_running_daemon(self, engine, monkeypatch, capsys):
@@ -506,7 +517,7 @@ class TestClientAndCLI:
         import uvicorn
 
         opened = []
-        monkeypatch.setattr(uvicorn, "run", lambda *a, **k: pytest.fail("started a second server"))
+        monkeypatch.setattr(uvicorn, "Server", lambda *a, **k: pytest.fail("started a second server"))
         monkeypatch.setattr("zephvox.web.daemon.Daemon", lambda *a, **k: pytest.fail("created a second daemon"))
         monkeypatch.setattr(web_server, "daemon_at", lambda url: url == "http://127.0.0.1:8765")
         monkeypatch.setattr(web_server.webbrowser, "open", opened.append)
@@ -884,3 +895,67 @@ def test_recording_while_an_analysis_runs_queues_the_next_one(daemon, api, wav_f
     assert [(t, d.get("pending")) for t, d in daemon.published if t.startswith("job_")][3:] == [
         ("job_finished", 1), ("job_started", None), ("job_finished", 0)]  # fmt: skip
     assert len([t for t, _ in daemon.published if t == "analysis_done"]) == 2
+
+
+class TestQuit:
+    """`zephvox quit`, and what `zephvox update` relies on."""
+
+    def test_the_endpoint_only_obeys_the_command_line(self, api, daemon, monkeypatch):
+        stopped = []
+        daemon.request_shutdown = lambda: stopped.append(True)
+        monkeypatch.setattr("zephvox.web.app.threading.Timer", lambda d, fn: SimpleNamespace(start=fn))
+        # Another website can't add a custom header without a preflight the daemon never answers.
+        assert api.post("/api/quit").status_code == 403 and stopped == []
+        assert api.post("/api/quit", headers={"X-Requested-With": "zephvox"}).json() == {"quitting": True}
+        assert stopped == [True]
+        daemon.request_shutdown = None
+        assert api.post("/api/quit", headers={"X-Requested-With": "zephvox"}).status_code == 409
+
+    @respx.mock
+    def test_stop_waits_until_the_daemon_is_gone(self, tmp_path):
+        web_client.write_daemon_file(tmp_path, URL)
+        respx.get(f"{URL}/api/settings").mock(side_effect=[httpx.Response(200, json={}),   # found
+                                                           httpx.Response(200, json={}),   # still up
+                                                           httpx.ConnectError("gone")])  # fmt: skip
+        quit_call = respx.post(f"{URL}/api/quit").respond(json={"quitting": True})
+        assert web_client.stop_daemon(tmp_path, sleep=lambda s: None) == URL
+        assert quit_call.calls.last.request.headers["x-requested-with"] == "zephvox"
+
+    @respx.mock
+    def test_an_older_daemon_is_ended_by_its_process_id(self, tmp_path):
+        web_client.write_daemon_file(tmp_path, URL)
+        respx.get(f"{URL}/api/settings").mock(side_effect=[httpx.Response(200, json={}), httpx.ConnectError("gone")])
+        respx.post(f"{URL}/api/quit").respond(404, json={"detail": "Not Found"})  # from before quit existed
+        respx.get(f"{URL}/api/status").respond(json={"pid": 4242})
+        ended = []
+        assert web_client.stop_daemon(tmp_path, terminate=ended.append, sleep=lambda s: None) == URL
+        assert ended == [4242]
+
+    @respx.mock
+    def test_nothing_running_and_a_daemon_that_wont_stop(self, tmp_path):
+        assert web_client.stop_daemon(tmp_path) is None
+        web_client.write_daemon_file(tmp_path, URL)
+        respx.get(f"{URL}/api/settings").respond(json={})  # always up
+        respx.post(f"{URL}/api/quit").respond(json={"quitting": True})
+        with pytest.raises(web_client.DaemonError, match="didn't stop"):
+            web_client.stop_daemon(tmp_path, wait=0.05, sleep=lambda s: None)
+
+    def test_start_detaches_and_waits_for_it(self, tmp_path, monkeypatch):
+        launched = []
+        answers = iter([None, None, URL])
+        monkeypatch.setattr(web_client, "find_daemon", lambda d, t=None: next(answers))
+        url = web_client.start_daemon(tmp_path, tmp_path / "data", popen=lambda cmd, **kw: launched.append((cmd, kw)),
+                                      sleep=lambda s: None)  # fmt: skip
+        assert url == URL and launched[0][0][1:] == ["-m", "zephvox.cli", "serve"]
+        assert launched[0][1]["cwd"] == tmp_path and launched[0][1].get("start_new_session") is True
+
+    def test_the_command(self, tmp_path, monkeypatch, capsys):
+        engine_config = tmp_path / "c.toml"
+        engine_config.write_text(f'[engine]\ndata_dir = "{tmp_path}"\n')
+        calls = []
+        monkeypatch.setattr("zephvox.web.client.stop_daemon", lambda d: calls.append(d) or None)
+        assert cli.main(["quit", "--config", str(engine_config)]) == 0
+        assert "isn't running" in capsys.readouterr().out and calls == [tmp_path]
+        monkeypatch.setattr("zephvox.web.client.stop_daemon", lambda d: URL)
+        assert cli.main(["quit", "--config", str(engine_config)]) == 0
+        assert "stopped" in capsys.readouterr().out

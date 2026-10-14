@@ -265,7 +265,8 @@
                 <tbody>
                   <tr><td><code>zephvox serve --open</code></td><td>start zephvox (or use the app menu)</td></tr>
                   <tr><td><code>zephvox setup</code></td><td>review the profile or repair the install (<code>--dry-run</code> only shows the plan)</td></tr>
-                  <tr><td><code>zephvox update</code></td><td>install the latest release, keeping your settings</td></tr>
+                  <tr><td><code>zephvox update</code></td><td>install the latest release, keeping your settings; stops zephvox first and starts it again afterwards</td></tr>
+                  <tr><td><code>zephvox quit</code></td><td>stop the running zephvox</td></tr>
                   <tr><td><code>zephvox uninstall</code></td><td>remove it, asking before deleting models or your recordings</td></tr>
                   <tr><td><code>zephvox doctor</code></td><td>print what it found on this computer, for troubleshooting</td></tr>
                 </tbody>
@@ -377,6 +378,7 @@ irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | ie
           <details><summary>Can I switch between the two later?</summary><p>Yes. <b>Settings → Where analysis runs</b> switches between this computer and a server. On a client install, choosing this computer offers to install the speech models.</p></details>
           <details><summary>How do I change the shortcut keys?</summary><p><b>Settings → General → Shortcuts</b>: click <b>Change</b> and press the new keys.</p></details>
           <details><summary>Which English does it check against?</summary><p>Standard American English by default, or British English with a custom profile. Some findings are accent rather than mistakes, and you can mark those as "not a mistake".</p></details>
+          <details><summary>How do I update it?</summary><p>Run <code>zephvox update</code>. If zephvox is running it is stopped and started again for you, and your settings, models and recordings are kept. If you installed from a git checkout, run <code>git pull</code> and then <code>uv run zephvox setup</code>.</p></details>
           <details><summary>How do I remove it?</summary><p>Run <code>zephvox uninstall</code>. It asks before deleting the models or your recordings.</p></details>
         </div>
       </div>

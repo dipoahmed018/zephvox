@@ -17,6 +17,7 @@ from pathlib import Path
 
 from ..engine.config import default_config_path, load_config, project_root
 from ..engine.errors import ZephvoxError
+from ..web.client import DaemonError, find_daemon, start_daemon, stop_daemon
 from . import ollama
 from .download import cache_path, plan_downloads
 from .state import STATE_FILE, InstallState, Runner, SetupError, is_checkout, sync
@@ -79,15 +80,39 @@ def run_update(args: argparse.Namespace, fetch: Fetch = http_get, runner: Runner
             return 0
         print(f"Updating {state.version or 'zephvox'} → {version} …")
         with tempfile.TemporaryDirectory() as tmp:
-            replace_tree(extract(fetch(url), Path(tmp)), root)
+            new_tree = extract(fetch(url), Path(tmp))  # downloaded first: a failure leaves zephvox running
+            data_dir = _data_dir(args)
+            running = find_daemon(data_dir) if data_dir else None
+            if running:
+                # Its files are about to change (on Windows they can't be replaced while it runs), and a
+                # running copy keeps the old code: so it is stopped now and started again below.
+                print("zephvox is running: stopping it for the update …")
+                stop_daemon(data_dir)
+            replace_tree(new_tree, root)
         sync(root, state.extras or ["models", state.accelerator or "cpu", "desktop", "web", "voice"], runner)
         state.version = version
         state.save(root)
-    except (ZephvoxError, OSError, tarfile.TarError) as e:
+    except (ZephvoxError, OSError, tarfile.TarError, DaemonError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
-    print(f"Updated to {version}. Run `uv run zephvox setup` if you want to review the profile.")
+    print(f"Updated to {version}.")
+    if running and not getattr(args, "no_restart", False):
+        print("Starting zephvox again …")
+        started = start_daemon(root, data_dir)
+        print(f"zephvox is running again at {started}." if started else
+              "It didn't come back up: run `zephvox serve` to see why.")  # fmt: skip
+    elif running:
+        print("Start it again with `zephvox serve`.")
+    print("Run `zephvox setup` if you want to review the profile (it also fetches anything a new release needs).")
     return 0
+
+
+def _data_dir(args: argparse.Namespace) -> Path | None:
+    """Where the daemon's files live, to find out whether it is running (None if the config can't be read)."""
+    try:
+        return load_config(getattr(args, "config", None) or default_config_path()).engine.data_dir
+    except ZephvoxError:
+        return None
 
 
 def run_uninstall(args: argparse.Namespace, ask: Callable[[str], str] = input, runner: Runner = subprocess.run) -> int:

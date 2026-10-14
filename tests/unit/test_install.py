@@ -437,6 +437,47 @@ class TestUpdate:
         assert update.run_update(Namespace(force=False), fetch, runner) == 0  # now up to date
         assert len(runner.ran("uv sync")) == 1
 
+    def test_update_stops_a_running_app_first_and_starts_it_again(self, tmp_path, monkeypatch, capsys):
+        root = tmp_path / "root"
+        (root / "src").mkdir(parents=True)
+        state.InstallState("cpu", state.extras_for("cpu"), "v1.0").save(root)
+        monkeypatch.setattr(update, "project_root", lambda: root)
+        monkeypatch.setattr(state, "find_uv", lambda: "uv")
+        archive = source_archive({"README.md": "new", "src/new.py": ""})
+        fetch = lambda url: json.dumps({"tag_name": "v1.1"}).encode() if "api.github" in url else archive  # noqa: E731
+        order = []
+        monkeypatch.setattr(update, "_data_dir", lambda args: tmp_path / "data")
+        monkeypatch.setattr(update, "find_daemon", lambda d: "http://127.0.0.1:8765")
+        monkeypatch.setattr(update, "stop_daemon", lambda d: order.append("stop"))
+        monkeypatch.setattr(update, "start_daemon", lambda r, d: order.append("start") or "http://127.0.0.1:8765")
+        runner = Recorder()
+        orig_replace = update.replace_tree
+        monkeypatch.setattr(update, "replace_tree", lambda a, b: (order.append("replace"), orig_replace(a, b))[1])
+        assert update.run_update(Namespace(force=False, no_restart=False), fetch, runner) == 0
+        assert order == ["stop", "replace", "start"]  # its files change only while it is stopped
+        assert "running again at http://127.0.0.1:8765" in capsys.readouterr().out
+
+        # --no-restart leaves it stopped, and says how to start it
+        state.InstallState("cpu", state.extras_for("cpu"), "v1.0").save(root)
+        order.clear()
+        assert update.run_update(Namespace(force=False, no_restart=True), fetch, runner) == 0
+        assert order == ["stop", "replace"] and "zephvox serve" in capsys.readouterr().out
+
+    def test_update_leaves_zephvox_running_when_the_download_fails(self, tmp_path, monkeypatch, capsys):
+        root = tmp_path / "root"
+        root.mkdir()
+        state.InstallState("cpu", state.extras_for("cpu"), "v1.0").save(root)
+        monkeypatch.setattr(update, "project_root", lambda: root)
+        stopped = []
+        monkeypatch.setattr(update, "find_daemon", lambda d: "http://127.0.0.1:8765")
+        monkeypatch.setattr(update, "stop_daemon", lambda d: stopped.append(True))
+
+        def offline(url):
+            raise OSError("no network")
+
+        assert update.run_update(Namespace(force=False), offline) == 2
+        assert stopped == [] and "no network" in capsys.readouterr().err
+
     def test_update_refuses_a_git_checkout(self, tmp_path, monkeypatch, capsys):
         (tmp_path / ".git").mkdir()
         monkeypatch.setattr(update, "project_root", lambda: tmp_path)

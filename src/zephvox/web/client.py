@@ -4,6 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import signal
+import subprocess
+import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -60,3 +65,59 @@ def call(url: str, method: str, path: str, transport: httpx.BaseTransport | None
 
 class DaemonError(Exception):
     pass
+
+
+# A custom header can't be sent by another website without a CORS preflight, which the daemon never
+# answers: only local programs (this CLI) can ask it to quit.
+QUIT_HEADER = {"X-Requested-With": "zephvox"}
+
+
+def _terminate(pid: int) -> None:
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True, check=False)
+    else:
+        os.kill(pid, signal.SIGTERM)
+
+
+def stop_daemon(data_dir: Path, wait: float = 60.0, transport: httpx.BaseTransport | None = None,
+                terminate: Callable[[int], None] = _terminate, sleep: Callable[[float], None] = time.sleep) -> str | None:  # fmt: skip
+    """Stop the running daemon and wait until it is gone. Returns its URL, or None if none was running.
+
+    It finishes the analysis it is in the middle of first (up to `wait` seconds)."""
+    url = find_daemon(data_dir, transport)
+    if url is None:
+        return None
+    try:
+        call(url, "POST", "/api/quit", transport, headers=QUIT_HEADER)
+    except DaemonError:
+        # A daemon from before `quit` existed: it says who it is, and that process is ended instead.
+        try:
+            pid = int(call(url, "GET", "/api/status", transport)["pid"])
+        except (DaemonError, httpx.HTTPError, KeyError, TypeError, ValueError):
+            raise DaemonError("zephvox is running but doesn't answer to quit; close it from its terminal") from None
+        terminate(pid)
+    except httpx.HTTPError:
+        pass  # it closed the connection while answering: it is going away
+    deadline = time.monotonic() + wait
+    while daemon_at(url, transport):
+        if time.monotonic() >= deadline:
+            raise DaemonError(f"zephvox didn't stop within {wait:g} s (it may still be analyzing a recording)")
+        sleep(0.2)
+    return url
+
+
+def start_daemon(root: Path, data_dir: Path, wait: float = 30.0, popen: Callable[..., Any] = subprocess.Popen,
+                 sleep: Callable[[float], None] = time.sleep) -> str | None:  # fmt: skip
+    """Start `zephvox serve` in the background, detached from this terminal. Returns its URL once it
+    answers, or None if it didn't come up in time."""
+    flags: dict[str, Any] = (
+        {"creationflags": subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP}  # type: ignore[attr-defined]
+        if os.name == "nt" else {"start_new_session": True})  # fmt: skip
+    popen([sys.executable, "-m", "zephvox.cli", "serve"], cwd=root, stdin=subprocess.DEVNULL,
+          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **flags)  # fmt: skip
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        if url := find_daemon(data_dir):
+            return url
+        sleep(0.5)
+    return None

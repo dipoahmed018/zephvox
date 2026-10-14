@@ -44,8 +44,10 @@ def serve(engine: Engine, host: str = "127.0.0.1", port: int = 8765, open_browse
     print(f"zephvox is running at {url}  (Ctrl+C to stop)", file=sys.stderr)
     if open_browser:
         threading.Timer(1.0, webbrowser.open, [url]).start()
+    web = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
+    daemon.request_shutdown = lambda: setattr(web, "should_exit", True)  # `zephvox quit`
     try:
-        uvicorn.run(app, host=host, port=port, log_level="warning")
+        web.run()
     finally:
         daemon.close()
         remove_daemon_file(data_dir)
