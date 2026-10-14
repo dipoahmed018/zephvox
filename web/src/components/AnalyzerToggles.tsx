@@ -14,7 +14,8 @@ export function AnalyzerToggles({ value, onChange, available }: Props) {
   const [hint, setHint] = useState("");
   const usable = (name: string) => !available || available.includes(name);
   const toggle = (name: string) => {
-    const next = value.includes(name) ? value.filter((v) => v !== name) : [...value, name];
+    // Always in the same order, however they were toggled.
+    const next = Object.keys(LABELS).filter((n) => (n === name ? !value.includes(n) : value.includes(n)));
     if (!next.some(usable)) {
       setHint("At least one check must stay on.");
       return;

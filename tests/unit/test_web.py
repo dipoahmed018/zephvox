@@ -582,3 +582,63 @@ def test_profile_preview_changes_nothing_and_status_has_hardware(daemon, monkeyp
     assert config_path.read_text() == 'profile = "large"\n'  # only a preview
     info = daemon.status()["hardware"]
     assert info["gpu"] == {"name": "RX 6800 XT", "vram_gb": 16.0, "backend": "rocm"} and info["cores"] == 8
+
+
+class TestShortcutFeedback:
+    def setup(self, daemon):
+        notes = []
+        daemon.notify = lambda title, body="": notes.append((title, body))
+        return notes
+
+    def test_practice_shortcut_picks_a_word_and_reports_the_score(self, daemon, wav_file):
+        notes = self.setup(daemon)
+        daemon.engine.analyze(wav_file)  # "think" was mispronounced: it becomes the top weak word
+        assert daemon.practice_target is None
+        daemon.fire("practice_attempt")
+        assert daemon.practice_target["text"] == "think"
+        assert notes[-1] == ("Say “think”", "It stops by itself when you stop talking.")
+        daemon.fire("practice_attempt")  # stop: scored in the background
+        daemon._worker.submit(lambda: None).result(timeout=10)
+        title, _ = notes[-1]
+        assert title.startswith("“think”:")
+        # remembered across restarts
+        assert Daemon(daemon.engine, start_triggers=False).practice_target["text"] == "think"
+
+    def test_without_any_word_it_says_so(self, daemon):
+        notes = self.setup(daemon)
+        daemon.fire("practice_attempt")
+        assert notes == [("speakcheck", "Pick a word to practice first, in speakcheck's Practice page")]
+        assert daemon.engine.recording_status() is None
+
+    def test_analysis_shortcut_announces_the_report(self, daemon):
+        notes = self.setup(daemon)
+        daemon.fire("toggle_recording")
+        assert notes[-1][0] == "Recording" and "Ctrl+Shift+Alt+R" in notes[-1][1]
+        daemon.fire("toggle_recording")
+        daemon._worker.submit(lambda: None).result(timeout=10)
+        assert notes[-2][0] == "Analyzing your recording…"
+        assert notes[-1][0] == "Your report is ready" and "pronunciation" in notes[-1][1]
+
+    def test_clicks_in_the_page_stay_quiet(self, daemon, wav_file):
+        notes = self.setup(daemon)
+        daemon.engine.analyze(wav_file)
+        daemon.set_practice_target("think")
+        daemon.start("practice")
+        daemon.stop()
+        daemon._worker.submit(lambda: None).result(timeout=10)
+        assert notes == []
+
+
+def test_notifier_commands(tmp_path, monkeypatch):
+    from speakcheck.web import notify
+
+    ran = []
+    monkeypatch.setattr(notify.shutil, "which", lambda name: "/usr/bin/notify-send")
+    notify.Notifier(runner=lambda cmd, **kw: ran.append(cmd), platform="linux")("Title", "Body")
+    assert ran[-1][0] == "/usr/bin/notify-send" and ran[-1][-2:] == ["Title", "Body"]
+    assert notify.Notifier(platform="darwin").command('Say "x"', "b")[2] == 'display notification "b" with title "Say \\"x\\""'
+    assert "ShowBalloonTip" in notify.Notifier(platform="win32").command("T", "it's")[-1]
+    notify.Notifier(enabled=False, runner=lambda cmd, **kw: ran.append(cmd), platform="linux")("x")
+    assert len(ran) == 1
+    monkeypatch.setattr(notify.shutil, "which", lambda name: None)
+    assert notify.Notifier(platform="linux").command("t", "b") is None

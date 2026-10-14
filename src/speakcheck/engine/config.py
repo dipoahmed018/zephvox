@@ -131,6 +131,8 @@ class EngineSettings(BaseModel):
     # Practice attempts stop by themselves after this much silence (0 = only manual stop).
     practice_auto_stop_s: float = 1.2
     practice_max_s: float = 10.0
+    # Desktop notifications for actions started with a global shortcut (recording, scores).
+    notifications: bool = True
 
 
 class ServerLimits(BaseModel):

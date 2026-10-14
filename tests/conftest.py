@@ -166,7 +166,7 @@ def registry() -> Registry:
 @pytest.fixture
 def config(tmp_path) -> Config:
     return Config(
-        engine=EngineSettings(data_dir=tmp_path / "data"),
+        engine=EngineSettings(data_dir=tmp_path / "data", notifications=False),  # no real desktop popups
         providers={
             "capture": ["fake-capture"],
             "stt": ["broken-stt", "fake-stt"],

@@ -41,7 +41,8 @@ class TestCustomFile:
 
 class TestChoices:
     @pytest.mark.parametrize("preset", ["large", "standard", "cpu", "cpu-light"])
-    def test_enter_throughout_keeps_the_preset(self, tmp_path, preset):
+    def test_enter_throughout_keeps_the_preset(self, tmp_path, preset, monkeypatch):
+        monkeypatch.setenv("SPEAKCHECK_HOME", str(tmp_path / "data"))  # not the real settings.json
         hw = machine([nvidia(16)])
         start = wizard.preview_config(tmp_path / "config.toml", preset, tmp_path / "none.toml")
         console = wizard.Console(interactive=True, ask=lambda q: "", out=lambda text="": None)

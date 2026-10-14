@@ -12,6 +12,7 @@ import dataclasses
 import functools
 import json
 import os
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -34,6 +35,7 @@ from ..engine.engine import Engine, Recording
 from ..engine.errors import ProviderUnavailable, RecordingError, SpeakcheckError
 from ..engine.events import Event
 from ..engine.session import Session
+from .notify import Notifier
 
 # Practice auto-stop: a level above SPEECH means the user started talking; staying below
 # SILENCE for `practice_auto_stop_s` afterwards ends the attempt.
@@ -104,7 +106,10 @@ class Daemon:
         self._worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix="engine")
         self._jobs = 0
         self._jobs_lock = threading.Lock()
-        self.practice_target: dict[str, Any] | None = None  # {"text": ..., "session_id": ...}
+        # {"text": ..., "session_id": ...}; remembered across restarts in settings.json
+        self.practice_target: dict[str, Any] | None = load_user_settings(engine.config.engine.data_dir).get("practice_target")
+        self.notify = Notifier(engine.config.engine.notifications)
+        self._shortcut_pending: set[str] = set()  # "analysis" / "practice": announce the result
         self._backend: Any = None  # LocalBackend | RemoteBackend, built on first use
         self._backend_lock = threading.Lock()
         self._sync: Any = None  # SyncWorker while a server is connected
@@ -208,8 +213,8 @@ class Daemon:
         meta: dict[str, Any] = {}
         if mode == "practice":
             if not self.practice_target:
-                raise RecordingError("Pick a word to practice first")
-            meta = dict(self.practice_target)
+                self._default_target()
+            meta = dict(self.practice_target)  # type: ignore[arg-type]
             backend = self.backend  # fail now (e.g. not connected) rather than after recording
         else:
             self.analyzers_for_next = analyzers
@@ -223,11 +228,22 @@ class Daemon:
         recording = self.engine.stop_recording()
         if recording.mode == "practice":
             meta = recording.meta
-            self._submit("practice", lambda: self.backend.practice(meta["text"], recording, meta.get("session_id")))
+            self._submit("practice", lambda: self._practice(meta["text"], recording, meta.get("session_id")))
         else:
             analyzers = self.analyzers_for_next
             self._submit("analysis", lambda: self._analyze(recording, analyzers))
         return recording
+
+    def _practice(self, target: str, recording: Recording, session_id: str | None) -> Any:
+        try:
+            attempt = self.backend.practice(target, recording, session_id)
+        except SpeakcheckError as e:
+            if "practice" in self._shortcut_pending:
+                self._shortcut_pending.discard("practice")
+                self.notify(f"Couldn't score “{target}”", str(e))
+            raise
+        self._announce_practice(attempt)
+        return attempt
 
     def _analyze(self, recording: Recording | Session, analyzers: list[str] | None):
         from ..client.remote import QueuedOffline
@@ -240,6 +256,7 @@ class Daemon:
             self.sync_soon()
             return None
         self.publish("analysis_done", session_id=result.session_id)
+        self._announce_analysis(result)
         self.sync_soon()
         return result
 
@@ -259,19 +276,57 @@ class Daemon:
         return self.stop()
 
     def fire(self, action: str) -> None:
-        """Run a shortcut action; errors become events instead of exceptions (no caller to catch them)."""
+        """Run a shortcut action; errors become events instead of exceptions (no caller to catch them).
+        The page may not be visible, so what happens is also shown as a desktop notification."""
+        print(f"· shortcut: {action}", file=sys.stderr, flush=True)
+        keys = self.engine.config.shortcuts.get(action, "")
         try:
+            was_recording = self.engine.is_recording()
             if action == "toggle_recording":
                 self.toggle("analysis")
+                if was_recording:
+                    self._shortcut_pending.add("analysis")
+                    self.notify("Analyzing your recording…", "You'll get a note when it's ready.")
+                else:
+                    self.notify("Recording", f"Speak now. Press {keys} again to stop and analyze.")
             elif action == "practice_attempt":
                 self.toggle("practice")
+                if not was_recording:
+                    self._shortcut_pending.add("practice")
+                    word = (self.practice_target or {}).get("text", "")
+                    self.notify(f"Say “{word}”", "It stops by itself when you stop talking.")
             elif action == "cancel":
-                if self.engine.is_recording():
+                if was_recording:
                     self.cancel()
+                    self.notify("Recording cancelled")
             else:
                 raise SpeakcheckError(f"Unknown action {action!r}")
         except SpeakcheckError as e:
             self.publish("action_error", action=action, message=str(e))
+            self.notify("speakcheck", str(e))
+
+    def _announce_practice(self, attempt: Any) -> None:
+        if "practice" not in self._shortcut_pending:
+            return
+        self._shortcut_pending.discard("practice")
+        if attempt.status == "no_speech":
+            self.notify(f"“{attempt.target}”: nothing heard", "Try again a little louder or closer to the microphone.")
+        elif attempt.status == "different_word":
+            self.notify(f"“{attempt.target}”: that sounded like another word", "Listen to the example and try again.")
+        elif attempt.passed:
+            self.notify(f"“{attempt.target}”: {attempt.score} ✓", "Passed: great pronunciation!")
+        else:
+            issue = next((w for w in attempt.words if not w.get("passed")), None)
+            hint = (issue or {}).get("tip") or (issue or {}).get("explanation") or "Try again."
+            self.notify(f"“{attempt.target}”: {attempt.score}", hint)
+
+    def _announce_analysis(self, result: Any) -> None:
+        if "analysis" not in self._shortcut_pending:
+            return
+        self._shortcut_pending.discard("analysis")
+        counts = {name: len(result.by_analyzer(name)) for name in result.analyzers}
+        found = ", ".join(f"{n} {name}" for name, n in counts.items()) or "nothing to check"
+        self.notify("Your report is ready", f"Found {found}. Open speakcheck to see it.")
 
     def reanalyze(self, session_id: str, analyzers: list[str] | None) -> Future:
         """Analyze an existing session again, in place (e.g. after tuning thresholds)."""
@@ -289,7 +344,18 @@ class Daemon:
 
     def set_practice_target(self, text: str | None, session_id: str | None = None) -> None:
         self.practice_target = {"text": text, "session_id": session_id} if text else None
+        data_dir = self.engine.config.engine.data_dir
+        stored = load_user_settings(data_dir)
+        stored["practice_target"] = self.practice_target
+        save_user_settings(data_dir, stored)
         self.publish("practice_target", target=self.practice_target)
+
+    def _default_target(self) -> None:
+        """No word chosen yet: practice the top one from "Words to work on"."""
+        weak = self.engine.weak_words(1)
+        if not weak:
+            raise RecordingError("Pick a word to practice first, in speakcheck's Practice page")
+        self.set_practice_target(weak[0]["target"])
 
     # --- settings -------------------------------------------------------------------------
 
