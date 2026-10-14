@@ -156,8 +156,8 @@ def _admin(args: argparse.Namespace, config: Config, db: Database, ask: Callable
         code = db.add_invite(acc.id, clock(), ttl)
         print(f"Invite for {acc.name} (one device, expires {when(clock() + ttl)}):\n\n  {code}\n")
         url = args.url or "https://<this server>"
-        print("On the device, install speakcheck and choose 'use a server', or run:\n")
-        print(f"  speakcheck setup --role client --server-url {url} --invite {code}")
+        print("On the device: Settings → Where analysis runs → A server (with this address and code), or install the small client with:\n")
+        print(f"  speakcheck setup --server-url {url} --invite {code}")
     elif command == "devices" and action == "list":
         account_id = _account(db, args.account).id if args.account else None
         names = {a.id: a.name for a in db.accounts()}
