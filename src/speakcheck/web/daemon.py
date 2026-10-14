@@ -625,8 +625,6 @@ class Daemon:
 
     def sharing_action(self, action: str, body: dict[str, Any]) -> dict[str, Any]:
         """Accounts, invites, devices, limits, jobs and webhook secrets (as `speakcheck server …`)."""
-        from ..server import admin
-
         try:
             return self._sharing_action(action, body)
         except KeyError as e:
