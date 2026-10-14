@@ -249,7 +249,7 @@ def load_config(path: Path | None = None) -> Config:
 
     profile = data.pop("profile", None)
     if profile is not None:
-        data = merge(profiles.get(profile).overlay, data)
+        data = merge(profiles.get(profile, path).overlay, data)
 
     # Stage lists and shortcuts in the file replace the defaults per key, not wholesale.
     providers = _default_providers()
@@ -283,7 +283,7 @@ def write_profile(path: Path, name: str, template: Path | None = None) -> None:
 
     A missing file starts from `template` (config.example.toml), so its options stay documented.
     """
-    profiles.get(name)  # validate
+    profiles.get(name, path)  # validate
     line = f'profile = "{name}"'
     if path.exists():
         text = path.read_text()
@@ -293,7 +293,7 @@ def write_profile(path: Path, name: str, template: Path | None = None) -> None:
     if PROFILE_LINE.search(head):
         head = PROFILE_LINE.sub(line, head, count=1)
     else:
-        head = f"{line}   # chosen by `speakcheck setup`: {', '.join(profiles.PROFILES)}\n\n{head}"
+        head = f"{line}   # chosen by `speakcheck setup`: {', '.join([*profiles.PROFILES, profiles.CUSTOM])}\n\n{head}"
     path.write_text(head + sep + rest)
 
 
@@ -301,7 +301,7 @@ def choose_profile(path: Path, name: str, template: Path | None = None) -> None:
     """Switch to a profile (setup or the GUI). Picking one is explicit, so the profile's analyzer
     choice replaces one saved earlier from the GUI."""
     write_profile(path, name, template)
-    analyzers = profiles.get(name).overlay.get("engine", {}).get("analyzers")
+    analyzers = profiles.get(name, path).overlay.get("engine", {}).get("analyzers")
     if analyzers is not None:
         data_dir = load_config(path).engine.data_dir
         stored = load_user_settings(data_dir)

@@ -22,3 +22,4 @@ web/*.tsbuildinfo
 /config.toml
 .env
 /.install.json
+/custom-profile.toml

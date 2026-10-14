@@ -10,7 +10,10 @@ config.toml still wins. Thresholds are first estimates, to be tuned on real mach
 
 from __future__ import annotations
 
+import json
+import tomllib
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from .errors import ConfigError
@@ -54,11 +57,77 @@ PROFILES: dict[str, Profile] = {p.name: p for p in [
 ]}  # fmt: skip
 
 
-def get(name: str) -> Profile:
+# "custom": the user's own choices from `speakcheck setup`, kept in custom-profile.toml next to
+# config.toml (a separate file, so config.toml's own tables are never duplicated).
+CUSTOM = "custom"
+CUSTOM_FILE = "custom-profile.toml"
+
+
+def custom_path(config_path: Path) -> Path:
+    return Path(config_path).parent / CUSTOM_FILE
+
+
+def load_custom(path: Path) -> dict[str, Any]:
+    try:
+        return tomllib.loads(Path(path).read_text())
+    except FileNotFoundError:
+        return {}
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        raise ConfigError(f"Invalid custom profile {path}: {e}") from e
+
+
+def save_custom(path: Path, overlay: dict[str, Any]) -> None:
+    header = "# Your custom profile, written by `speakcheck setup` (run it again to change it).\n"
+    header += "# Settings in config.toml still win over these.\n\n"
+    Path(path).write_text(header + dump_toml(overlay))
+
+
+def custom(overlay: dict[str, Any]) -> Profile:
+    cpu = overlay.get("provider", {}).get("wav2vec2", {}).get("device") == "cpu"
+    return Profile(CUSTOM, "Custom", "Your own choices from setup.", not cpu, overlay)
+
+
+def get(name: str, config_path: Path | None = None) -> Profile:
+    """A profile by name; "custom" reads custom-profile.toml next to `config_path`."""
+    if name == CUSTOM:
+        return custom(load_custom(custom_path(config_path)) if config_path else {})
     try:
         return PROFILES[name]
     except KeyError:
-        raise ConfigError(f"Unknown profile {name!r}; choose one of: {', '.join(PROFILES)}") from None
+        raise ConfigError(f"Unknown profile {name!r}; choose one of: {', '.join([*PROFILES, CUSTOM])}") from None
+
+
+def dump_toml(data: dict[str, Any], prefix: str = "") -> str:
+    """Tables of strings, numbers, booleans and lists of those (all a profile holds)."""
+    lines, tables = [], []
+    for key, value in data.items():
+        if isinstance(value, dict):
+            tables.append((key, value))
+        else:
+            lines.append(f"{_key(key)} = {_value(value)}")
+    out = "\n".join(lines) + ("\n" if lines else "")
+    for key, value in tables:
+        name = f"{prefix}.{_key(key)}" if prefix else _key(key)
+        if any(not isinstance(v, dict) for v in value.values()) or not value:
+            out += f"\n[{name}]\n"
+        out += dump_toml(value, name)
+    return out
+
+
+def _key(key: str) -> str:
+    return key if key and all(c.isalnum() or c in "-_" for c in key) else json.dumps(key)
+
+
+def _value(value: Any) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    if isinstance(value, str):
+        return json.dumps(value, ensure_ascii=False)
+    if isinstance(value, (list, tuple)):
+        return "[" + ", ".join(_value(v) for v in value) + "]"
+    raise TypeError(f"can't write {type(value).__name__} to TOML")
 
 
 def recommend(hw: Hardware) -> str:

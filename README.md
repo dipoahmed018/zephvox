@@ -64,6 +64,13 @@ Nothing else needs a system install: the pronunciation dictionary and ffmpeg's d
 | `small` | GPU with 6–10 GB, or a Mac with 8 GB | Whisper large-v3-turbo (GPU) | qwen3:4b |
 | `cpu` | no usable GPU, 16 GB+ RAM | Whisper small.en (faster-whisper) | qwen3:4b (slow) |
 | `cpu-light` | under 16 GB RAM | Whisper base.en (faster-whisper) | off (a cloud LLM can be added) |
+| `custom` | your own choices | any Whisper size, GPU or CPU | any Ollama model, an OpenAI-compatible API, or off |
+
+**Custom** asks for each part in turn: GPU or CPU, the speech-to-text model, American or British
+pronunciation, the grammar model (or an API, or none) and the practice voice. Each question shows
+download sizes and starts from the recommended profile, so pressing Enter throughout gives that profile.
+Your answers are saved in `custom-profile.toml` next to `config.toml`, and running setup again starts
+from them. Without a terminal, `--profile custom` reuses the saved file.
 
 Change profile any time in the page's **Settings**, or with `speakcheck setup` (which also installs
 anything the new profile needs). A profile is only a starting point: anything you set in `config.toml`

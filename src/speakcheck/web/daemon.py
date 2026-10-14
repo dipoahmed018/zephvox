@@ -499,18 +499,29 @@ class Daemon:
 
         root = project_root()
         hw = self.hardware
+        listed = [
+            {"name": p.name, "title": p.title, "description": p.description, "gpu": p.gpu,
+             "llm_model": p.llm_model, "accelerator": profiles.accelerator(p, hw)}
+            for p in profiles.PROFILES.values()
+        ]  # fmt: skip
+        path = self._config_path()
+        if profiles.custom_path(path).exists():  # made with setup's Custom questions
+            from ..install import custom
+            from ..install.wizard import preview_config
+
+            mine = profiles.get(profiles.CUSTOM, path)
+            config = preview_config(path, profiles.CUSTOM, root / "config.example.toml" if root else path)
+            listed.append({"name": mine.name, "title": "Custom", "gpu": mine.gpu, "llm_model": mine.llm_model,
+                           "description": custom.describe(custom.defaults_from(config, hw)) + ". Change it with "
+                           "`speakcheck setup`.", "accelerator": profiles.accelerator(mine, hw)})  # fmt: skip
         return {
             "current": self.engine.config.profile,
             "recommended": profiles.recommend(hw),
             "hardware": hw.summary(),
             "installed_accelerator": InstallState.load(root).accelerator if root else None,
-            "config_path": str(self._config_path()),
-            "profiles": [
-                {"name": p.name, "title": p.title, "description": p.description, "gpu": p.gpu,
-                 "llm_model": p.llm_model, "accelerator": profiles.accelerator(p, hw)}
-                for p in profiles.PROFILES.values()
-            ],
-        }  # fmt: skip
+            "config_path": str(path),
+            "profiles": listed,
+        }
 
     def set_profile(self, name: str) -> dict[str, Any]:
         """Switch profile now. Models load on next use; what can't happen here is listed in `needs`."""
@@ -518,7 +529,7 @@ class Daemon:
         from ..install.download import plan_downloads
         from ..install.wizard import downloaded
 
-        profile = profiles.get(name)
+        profile = profiles.get(name, self._config_path())
         if self.busy or self.engine.is_recording():
             raise SpeakcheckError("finish the current recording or analysis first")
         root = project_root()

@@ -15,6 +15,8 @@ from ..base import Availability, Download, ProviderSettings, STTProvider
 DISFLUENT_PROMPT = "Umm, let me think like, hmm... Okay, here's what I'm, like, thinking."
 
 
+APPROX_GB = {"base.en": 0.15, "small.en": 0.5, "medium.en": 1.5, "large-v3": 3.1}
+
 class FasterWhisperSTT(STTProvider):
     name = "faster-whisper"
 
@@ -36,7 +38,7 @@ class FasterWhisperSTT(STTProvider):
         return Availability(True)
 
     def downloads(self) -> list[Download]:
-        approx = {"base.en": 0.15, "small.en": 0.5, "medium.en": 1.5, "large-v3": 3.1}.get(self.settings.model)
+        approx = APPROX_GB.get(self.settings.model)
         return [Download("faster-whisper", self.settings.model, approx)]
 
     def capabilities(self) -> dict[str, Any]:

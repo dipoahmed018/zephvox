@@ -51,7 +51,8 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("desktop-entry", parents=[common],
                    help="add speakcheck to the app menu (Linux: also names its global shortcuts)")  # fmt: skip
     st = sub.add_parser("setup", parents=[common], help="detect this machine, choose a profile, install models")
-    st.add_argument("--profile", choices=list(PROFILES), help="skip the question and use this profile")
+    st.add_argument("--profile", choices=[*PROFILES, "custom"],
+                    help="skip the question and use this profile (custom: ask each part, or reuse saved choices)")  # fmt: skip
     st.add_argument("--accelerator", choices=["cpu", "cuda", "rocm"], help="PyTorch build (default: detected)")
     st.add_argument("-y", "--yes", action="store_true", help="accept every default without asking")
     st.add_argument("--no-download", action="store_true", help="download models on first use instead")

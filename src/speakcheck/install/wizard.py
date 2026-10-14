@@ -94,16 +94,21 @@ def gb(value: float | None) -> str:
     return "size unknown" if value is None else f"{value:.1f} GB" if value >= 1 else f"{value * 1000:.0f} MB"
 
 
-def preview_config(config_path: Path, profile: str, template: Path) -> Config:
-    """The config this profile would give, without touching the user's file yet."""
+def preview_config(config_path: Path, profile: str, template: Path, custom: dict | None = None) -> Config:
+    """The config this profile would give, without touching the user's files yet. `custom`: the
+    overlay for profile "custom" (default: the saved custom-profile.toml)."""
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "config.toml"
         if config_path.exists():
             shutil.copyfile(config_path, path)
+        if profile == profiles.CUSTOM:
+            overlay = custom if custom is not None else profiles.load_custom(profiles.custom_path(config_path))
+            profiles.save_custom(profiles.custom_path(path), overlay)
         write_profile(path, profile, template=template)
         config = load_config(path)
+        chosen = profiles.get(profile, path)
     # As choose_profile() will do: the profile's analyzers replace ones saved from the GUI.
-    if (analyzers := profiles.get(profile).overlay.get("engine", {}).get("analyzers")) is not None:
+    if (analyzers := chosen.overlay.get("engine", {}).get("analyzers")) is not None:
         config.engine.analyzers = list(analyzers)
     return config
 
@@ -134,6 +139,7 @@ class Setup:
         self.template = root / "config.example.toml"
         self.hw = detect(root)
         self.python = sys.executable
+        self.custom: dict | None = None  # the overlay from the Custom questions, saved when installing
 
     # --- steps ----------------------------------------------------------------------------
 
@@ -160,10 +166,35 @@ class Setup:
         self.console.step("Profile")
         options = [(p.name, f"{p.title:<13} {p.description}" + ("  (recommended)" if p.name == recommended else ""))
                    for p in profiles.PROFILES.values()]  # fmt: skip
-        if self.args.profile:
+        options.append((profiles.CUSTOM, f"{'Custom':<13} choose each part yourself"))
+        if self.args.profile and not (self.args.profile == profiles.CUSTOM and self.console.interactive):
             say(f"  Using --profile {self.args.profile}.")
+            if self.args.profile == profiles.CUSTOM and not profiles.custom_path(self.config_path).exists():
+                raise SetupError("--profile custom without a terminal needs a saved custom-profile.toml "
+                                 "(run setup once interactively and choose Custom)")  # fmt: skip
             return self.args.profile
-        return self.console.choose("Profile", options, default)
+        name = self.console.choose("Profile", options, self.args.profile or default)
+        if name == profiles.CUSTOM:
+            self.custom = self.customize(recommended)
+        return name
+
+    def customize(self, recommended: str) -> dict:
+        """The Custom questions, starting from the saved custom profile or the recommended one."""
+        from . import custom
+
+        saved = profiles.custom_path(self.config_path).exists()
+        start = preview_config(self.config_path, profiles.CUSTOM if saved else recommended, self.template)
+        choices = custom.defaults_from(start, self.hw)
+        while True:
+            choices = custom.ask(self.console, self.hw, choices)
+            overlay = custom.overlay_for(choices)
+            config = preview_config(self.config_path, profiles.CUSTOM, self.template, overlay)
+            size = sum(d.approx_gb or 0 for d in plan_downloads(config)
+                       if not downloaded(d) and (d.source != "ollama" or grammar_enabled(config)))  # fmt: skip
+            self.console.say(f"\n  Summary: {custom.describe(choices)}")
+            self.console.say(f"  Model downloads: about {gb(size)}")
+            if self.console.confirm("  Use this?"):
+                return overlay
 
     def show_plan(self, profile: profiles.Profile, accelerator: str, config: Config,
                   downloads: list[Download], ask: bool = True) -> bool:  # fmt: skip
@@ -449,9 +480,9 @@ class Setup:
         if role == "client":
             return self.run_client()
         name = self.choose_profile()
-        profile = profiles.get(name)
+        profile = profiles.custom(self.custom) if self.custom is not None else profiles.get(name, self.config_path)
         accelerator = self.args.accelerator or profiles.accelerator(profile, self.hw)
-        config = preview_config(self.config_path, name, self.template)
+        config = preview_config(self.config_path, name, self.template, self.custom)
         downloads = plan_downloads(config)
         if self.args.dry_run:
             self.show_plan(profile, accelerator, config, downloads, ask=False)
@@ -474,6 +505,9 @@ class Setup:
             state.version = self.args.installed_version
         sync(self.root, state.extras, self.run)
         state.save(self.root)
+        if self.custom is not None:
+            profiles.save_custom(profiles.custom_path(self.config_path), self.custom)
+            say(f"  Custom choices saved in {profiles.custom_path(self.config_path)}")
         choose_profile(self.config_path, name, template=self.template)
         say(f"  Profile '{name}' saved in {self.config_path}")
 

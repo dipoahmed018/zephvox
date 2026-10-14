@@ -5,7 +5,8 @@
 # config.toml is git-ignored, so your local choices are never committed. Everything below is
 # commented out and shows the default: uncomment only what you want to change.
 #
-# `speakcheck setup` writes the chosen profile on the first line: large, standard, small, cpu or cpu-light.
+# `speakcheck setup` writes the chosen profile on the first line: large, standard, small, cpu, cpu-light,
+# or custom (your own answers to setup's questions, saved in custom-profile.toml next to this file).
 # A profile changes some of the defaults below (model sizes, CPU vs GPU); anything you set here wins.
 # Secrets and machine-specific environment variables go in .env (see .env.example).
 # Choices made in the web GUI (microphone, voice, analyzers) are saved separately and win over this file.
