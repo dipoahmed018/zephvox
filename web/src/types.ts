@@ -36,9 +36,17 @@ export type Feedback = Record<string, string>; // finding index → "dismissed"
 export interface SessionSummary {
   id: string;
   created: string;
-  duration: number;
+  duration: number | null;
   counts: Record<string, number>;
   preview: string;
+  pending?: boolean; // recorded while the server was unreachable
+}
+
+export interface SyncStatus {
+  last: number | null;
+  error: string | null;
+  offline: boolean;
+  storage_full: boolean;
 }
 
 export type PhoneStatus = "ok" | "minor" | "wrong" | "missing" | "extra";
@@ -188,6 +196,7 @@ export interface RemoteInfo {
   insecure: boolean;
   engine_installed: boolean;
   install: InstallProgress;
+  sync_status: SyncStatus | null;
   reachable: boolean | null;
   error: string | null;
 }

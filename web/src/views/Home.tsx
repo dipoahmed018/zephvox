@@ -26,8 +26,8 @@ export function Home() {
   }, []);
 
   useEffect(() => {
-    run(api.sessions).then((s) => s && setRecent(s.slice(0, 3)));
-  }, [state.lastAnalysis?.seq]);
+    run(api.sessions).then((s) => s && setRecent(s.filter((x) => !x.pending).slice(0, 3)));
+  }, [state.lastAnalysis?.seq, state.sessionsVersion]);
 
   const rec = state.recording;
   const recordingHere = rec?.mode === "analysis";
@@ -117,7 +117,7 @@ export function Home() {
                     <span className="meta row" style={{ gap: 6 }}>
                       <span className="chip teal">{s.counts.pronunciation ?? 0}</span>
                       <span className="chip amber">{s.counts.grammar ?? 0}</span>
-                      <span className="faint">{fmtDuration(s.duration)}</span>
+                      <span className="faint">{fmtDuration(s.duration ?? 0)}</span>
                     </span>
                   </button>
                 </li>

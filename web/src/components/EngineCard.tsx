@@ -2,7 +2,7 @@ import { Laptop, Server } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { useAction, useEngine } from "../engine";
-import type { RemoteInfo } from "../types";
+import type { RemoteInfo, SyncStatus } from "../types";
 
 function parseHeaders(text: string): Record<string, string> {
   const headers: Record<string, string> = {};
@@ -11,6 +11,13 @@ function parseHeaders(text: string): Record<string, string> {
     if (at > 0) headers[line.slice(0, at).trim()] = line.slice(at + 1).trim();
   }
   return headers;
+}
+
+function syncText(s: SyncStatus): string {
+  if (s.offline) return "Server unreachable: recordings wait here and sync when it's back.";
+  if (s.storage_full) return "Your space on the server is full: new recordings stay on this computer only.";
+  if (s.error) return `Sync problem: ${s.error}`;
+  return s.last ? `Synced at ${new Date(s.last * 1000).toLocaleTimeString()}.` : "Syncing…";
 }
 
 export function EngineCard() {
@@ -134,6 +141,11 @@ export function EngineCard() {
                    onChange={(e) => act(() => api.setRemote({ sync: e.target.checked }))} />
             Back up history to the server (and see it on your other devices)
           </label>
+          {info.sync && (state.sync ?? info.sync_status) && (
+            <p className="faint" style={{ marginTop: -4 }}>
+              {syncText(state.sync ?? info.sync_status!)}
+            </p>
+          )}
           <div className="row" style={{ gap: 8 }}>
             <button className="btn small" disabled={busy} onClick={() => act(api.rotateKey)}
                     title="The old key stops working at once">

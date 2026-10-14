@@ -18,7 +18,7 @@ from ..engine.models import AnalysisResult
 from ..engine.practice import PracticeAttempt
 from ..engine.session import Session
 from . import credentials
-from .remote import PracticeStream, ServerClient, ServerError
+from .remote import PracticeStream, QueuedOffline, ServerClient, ServerError, ServerUnreachable
 
 RELAYED = ("stage_started", "stage_finished", "progress", "warning", "provider_fallback")
 TTS_CACHE = 256
@@ -90,13 +90,20 @@ class RemoteBackend:
         return session
 
     def analyze(self, source: Source, analyzers: list[str] | None = None) -> AnalysisResult:
+        from .sync import PENDING_FILE, mark_pending
+
         session = self._session(source)
         events = self.engine.events
         events.emit("stage_started", stage="upload")
-        job = self.client.submit(session.audio_path, analyzers or self.engine.config.engine.analyzers,
-                                 idempotency_key=f"{session.id}-{uuid.uuid4().hex}")  # fmt: skip
-        events.emit("stage_finished", stage="upload")
-        done = self.client.wait(job["id"], lambda e: e["type"] in RELAYED and events.emit(e["type"], **e["data"]))
+        try:
+            job = self.client.submit(session.audio_path, analyzers or self.engine.config.engine.analyzers,
+                                     idempotency_key=f"{session.id}-{uuid.uuid4().hex}")  # fmt: skip
+            events.emit("stage_finished", stage="upload")
+            done = self.client.wait(job["id"], lambda e: e["type"] in RELAYED and events.emit(e["type"], **e["data"]))
+        except ServerUnreachable as e:
+            mark_pending(session, analyzers)
+            raise QueuedOffline(f"Saved: it will be analyzed when the server can be reached again ({e})") from e
+        (session.dir / PENDING_FILE).unlink(missing_ok=True)
         if done["status"] != "done":
             raise ServerError(f"the server couldn't analyze this recording: {done.get('error') or done['status']}")
         result = AnalysisResult.from_dict(done["result"])

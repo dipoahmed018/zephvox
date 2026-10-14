@@ -33,6 +33,10 @@ class ServerUnreachable(ServerError):
     """The server can't be reached right now (offline, down, DNS): worth retrying later."""
 
 
+class QueuedOffline(ServerUnreachable):
+    """The recording is saved and will be analyzed when the server can be reached again."""
+
+
 def expand_headers(headers: dict[str, str], env: dict[str, str] | None = None) -> dict[str, str]:
     """`${VAR}` in header values comes from the environment (.env), so secrets stay out of config.toml."""
     env = os.environ if env is None else env
@@ -157,6 +161,33 @@ class ServerClient:
 
     def practice(self) -> PracticeStream:
         return PracticeStream(self)
+
+    # --- synced history -----------------------------------------------------------------
+
+    def sessions_since(self, since: float) -> dict[str, Any]:
+        return self._json("GET", "/v1/sessions", params={"since": since})
+
+    def get_session(self, sid: str) -> dict[str, Any]:
+        return self._json("GET", f"/v1/sessions/{sid}")
+
+    def put_session(self, sid: str, updated: float, result: dict[str, Any], feedback: dict[str, str]) -> None:
+        self.request("PUT", f"/v1/sessions/{sid}", json={"updated": updated, "result": result, "feedback": feedback})
+
+    def put_audio(self, sid: str, path: Path) -> None:
+        self.request("PUT", f"/v1/sessions/{sid}/audio", content=Path(path).read_bytes(),
+                     headers={"Content-Type": "audio/wav"}, timeout=UPLOAD_TIMEOUT_S)  # fmt: skip
+
+    def get_audio(self, sid: str) -> bytes:
+        return self.request("GET", f"/v1/sessions/{sid}/audio", timeout=UPLOAD_TIMEOUT_S).content
+
+    def delete_session(self, sid: str, updated: float) -> None:
+        self.request("DELETE", f"/v1/sessions/{sid}", params={"updated": updated})
+
+    def push_attempts(self, attempts: list[dict[str, Any]]) -> int:
+        return self._json("POST", "/v1/practice/attempts", json={"attempts": attempts})["added"]
+
+    def pull_attempts(self, since: float) -> dict[str, Any]:
+        return self._json("GET", "/v1/practice/attempts", params={"since": since})
 
 
 class PracticeStream:

@@ -14,7 +14,7 @@ export function History() {
   const load = () => run(api.sessions).then((s) => s && setSessions(s));
   useEffect(() => {
     load();
-  }, [state.lastAnalysis?.seq]);
+  }, [state.lastAnalysis?.seq, state.sessionsVersion]);
 
   const remove = async (s: SessionSummary) => {
     if (!window.confirm(`Delete the recording from ${fmtDate(s.created)}? This can't be undone.`)) return;
@@ -45,14 +45,20 @@ export function History() {
                 <div style={{ fontWeight: 600 }}>{fmtDate(s.created)}</div>
                 <div className="preview">{s.preview || "—"}</div>
               </div>
-              <div className="row" style={{ gap: 6 }}>
-                <span className="chip teal" title="Pronunciation issues">{s.counts.pronunciation ?? 0}</span>
-                <span className="chip amber" title="Grammar issues">{s.counts.grammar ?? 0}</span>
-                <span className="faint" style={{ minWidth: 40, textAlign: "right" }}>{fmtDuration(s.duration)}</span>
-              </div>
-              <button className="btn small" onClick={() => navigate("report", s.id)}>
-                Open
-              </button>
+              {s.pending ? (
+                <span className="chip amber" title="Recorded while the server was unreachable">waiting for the server</span>
+              ) : (
+                <>
+                  <div className="row" style={{ gap: 6 }}>
+                    <span className="chip teal" title="Pronunciation issues">{s.counts.pronunciation ?? 0}</span>
+                    <span className="chip amber" title="Grammar issues">{s.counts.grammar ?? 0}</span>
+                    <span className="faint" style={{ minWidth: 40, textAlign: "right" }}>{fmtDuration(s.duration ?? 0)}</span>
+                  </div>
+                  <button className="btn small" onClick={() => navigate("report", s.id)}>
+                    Open
+                  </button>
+                </>
+              )}
               <button className="btn ghost small danger" aria-label="Delete" onClick={() => remove(s)}>
                 <Trash2 size={15} />
               </button>

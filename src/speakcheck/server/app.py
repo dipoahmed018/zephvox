@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import shutil
 import time
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ from typing import Any
 
 import numpy as np
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile, WebSocket
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.websockets import WebSocketDisconnect
 
@@ -37,6 +38,20 @@ CHUNK = 1 << 20
 class Caller:
     device: Device
     account: Account
+
+
+SESSION_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$")
+MAX_SESSION_JSON = 5 * 1024 * 1024
+
+
+class SessionBody(BaseModel):
+    updated: float
+    result: dict[str, Any]
+    feedback: dict[str, str] = Field(default_factory=dict)
+
+
+class AttemptsBody(BaseModel):
+    attempts: list[dict[str, Any]] = Field(max_length=1000)
 
 
 class RedeemBody(BaseModel):
@@ -283,6 +298,112 @@ def create_server_app(server: Server) -> FastAPI:
                     await ws.send_json({"type": "error", "message": f"unknown message type {kind!r}"})
         except WebSocketDisconnect:
             return
+
+    # --- synced history -------------------------------------------------------------------
+
+    def session_dir(who: Caller, sid: str):
+        if not SESSION_ID.match(sid):
+            raise HTTPException(422, "invalid session id")
+        return server.root / "accounts" / who.account.id / "sessions" / sid
+
+    def check_storage(who: Caller, sid: str, new_bytes: int, part: str) -> None:
+        limit = server.limits(who.account).storage_mb * 1024 * 1024
+        current = db.synced(who.account.id, sid)
+        folder = session_dir(who, sid)
+        old = (folder / part).stat().st_size if (folder / part).exists() else 0
+        if current and current["deleted"]:
+            old = 0
+        if db.storage_bytes(who.account.id) - old + new_bytes > limit:
+            raise HTTPException(507, f"this account's synced history is full ({limit // (1024 * 1024)} MB)")
+
+    def folder_bytes(folder) -> int:
+        return sum(p.stat().st_size for p in folder.iterdir() if p.is_file()) if folder.exists() else 0
+
+    @app.get("/v1/sessions")
+    def list_sessions(since: float = 0.0, who: Caller = Depends(caller)) -> dict[str, Any]:
+        rows = db.synced_since(who.account.id, since)
+        return {"now": server.clock(), "sessions": [
+            {"id": r["session_id"], "updated": r["updated"], "deleted": bool(r["deleted"]),
+             "has_audio": bool(r["has_audio"]), "origin": r["origin"]} for r in rows]}  # fmt: skip
+
+    @app.get("/v1/sessions/{sid}")
+    def get_session(sid: str, who: Caller = Depends(caller)) -> dict[str, Any]:
+        row, folder = db.synced(who.account.id, sid), session_dir(who, sid)
+        if row is None or row["deleted"] or not (folder / "result.json").exists():
+            raise HTTPException(404, "no such session")
+        feedback = json.loads((folder / "feedback.json").read_text()) if (folder / "feedback.json").exists() else {}
+        return {"id": sid, "updated": row["updated"], "has_audio": bool(row["has_audio"]),
+                "result": json.loads((folder / "result.json").read_text()), "feedback": feedback}  # fmt: skip
+
+    @app.put("/v1/sessions/{sid}")
+    def put_session(sid: str, body: SessionBody, who: Caller = Depends(caller)) -> dict[str, Any]:
+        folder = session_dir(who, sid)
+        row = db.synced(who.account.id, sid)
+        if row and not row["deleted"]:
+            if row["origin"] != who.device.id and (folder / "result.json").exists():
+                stored = json.loads((folder / "result.json").read_text())
+                if stored.get("created") != body.result.get("created"):
+                    raise HTTPException(409, "id_taken: another device synced a different session with this id")
+            if row["updated"] > body.updated:
+                raise HTTPException(409, f"newer: the server has a newer version ({row['updated']})")
+        result = json.dumps(body.result, ensure_ascii=False).encode()
+        feedback = json.dumps(body.feedback).encode()
+        if len(result) > MAX_SESSION_JSON:
+            raise HTTPException(413, "session result is too large")
+        check_storage(who, sid, len(result) + len(feedback), "result.json")
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "result.json").write_bytes(result)
+        (folder / "feedback.json").write_bytes(feedback)
+        db.put_synced(who.account.id, sid, who.device.id, body.updated, server.clock(), bytes=folder_bytes(folder))
+        return {"id": sid, "updated": body.updated}
+
+    @app.put("/v1/sessions/{sid}/audio")
+    async def put_session_audio(sid: str, request: Request, who: Caller = Depends(caller)) -> dict[str, Any]:
+        folder = session_dir(who, sid)
+        row = db.synced(who.account.id, sid)
+        if row is None or row["deleted"]:
+            raise HTTPException(404, "send the session before its audio")
+        data = bytearray()
+        limit = server.settings.max_upload_mb * 1024 * 1024
+        async for chunk in request.stream():
+            data += chunk
+            if len(data) > limit:
+                raise HTTPException(413, f"audio is larger than {server.settings.max_upload_mb} MB")
+        if not bytes(data[:4]) == b"RIFF":
+            raise HTTPException(422, "send the session audio as WAV")
+        check_storage(who, sid, len(data), "audio.wav")
+        (folder / "audio.wav").write_bytes(bytes(data))
+        db.put_synced(who.account.id, sid, row["origin"], row["updated"], server.clock(), bytes=folder_bytes(folder),
+                      has_audio=True)  # fmt: skip
+        return {"id": sid, "bytes": len(data)}
+
+    @app.get("/v1/sessions/{sid}/audio")
+    def get_session_audio(sid: str, who: Caller = Depends(caller)) -> FileResponse:
+        path = session_dir(who, sid) / "audio.wav"
+        row = db.synced(who.account.id, sid)
+        if row is None or row["deleted"] or not path.exists():
+            raise HTTPException(404, "no audio for this session")
+        return FileResponse(path, media_type="audio/wav")
+
+    @app.delete("/v1/sessions/{sid}")
+    def delete_session(sid: str, updated: float = Query(...), who: Caller = Depends(caller)) -> dict[str, Any]:
+        folder = session_dir(who, sid)
+        row = db.synced(who.account.id, sid)
+        if row and not row["deleted"] and row["updated"] > updated:
+            raise HTTPException(409, f"newer: the server has a newer version ({row['updated']})")
+        shutil.rmtree(folder, ignore_errors=True)
+        db.put_synced(who.account.id, sid, who.device.id, updated, server.clock(), deleted=True, bytes=0, has_audio=False)
+        return {"deleted": sid}
+
+    @app.post("/v1/practice/attempts")
+    def push_attempts(body: AttemptsBody, who: Caller = Depends(caller)) -> dict[str, Any]:
+        pairs = [(f"{a.get('at')}|{a.get('target')}|{a.get('score')}", json.dumps(a, ensure_ascii=False))
+                 for a in body.attempts]  # fmt: skip
+        return {"added": db.add_attempts(who.account.id, pairs, server.clock())}
+
+    @app.get("/v1/practice/attempts")
+    def pull_attempts(since: float = 0.0, who: Caller = Depends(caller)) -> dict[str, Any]:
+        return {"now": server.clock(), "attempts": [json.loads(d) for _, d in db.attempts_since(who.account.id, since)]}
 
     # --- reference voices ---------------------------------------------------------------
 

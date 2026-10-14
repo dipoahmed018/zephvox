@@ -296,6 +296,12 @@ moment after you stop. In the page's settings ("Where analysis runs") you can sw
 server and this computer. Choosing this computer on a client-only install offers to install the
 engine there, in the background. A server-only install adds the app with `speakcheck setup --role full`.
 
+**History sync** is on by default in client mode (a full install can turn it on in the same card):
+sessions, feedback, recordings and practice scores are backed up to the server under your account,
+and sessions from your other devices appear in History. The newest edit wins, and deleting a session
+deletes it everywhere. If the server can't be reached, recording still works: the session waits
+("waiting for the server" in History) and is analyzed as soon as the server is back.
+
 | API | What it does |
 |---|---|
 | `POST /v1/jobs` | upload audio (`audio`, optional `analyzers`, `webhook_url`; `Idempotency-Key` header) → `202` with the job id and `Location` |
@@ -303,6 +309,7 @@ engine there, in the background. A server-only install adds the app with `speakc
 | `WS /v1/practice` | `start` (target text) → 16 kHz 16-bit mono PCM while speaking → `end` → score, typically under 0.1 s later |
 | `GET /v1/tts` | reference pronunciation audio |
 | `GET /v1/account`, `/v1/devices` | the account's limits, webhook secret and devices; `POST /v1/devices/me/rotate` for a new key |
+| `GET/PUT/DELETE /v1/sessions/{id}` (+ `/audio`), `/v1/practice/attempts` | history sync (per account; storage limit applies) |
 
 Webhooks are signed: `Speakcheck-Signature: t=<unix>,v1=<HMAC-SHA256(webhook secret, "<t>.<body>")>`,
 retried after 1, 5 and 30 minutes. Full API docs are served at `/v1/docs`. Settings and default

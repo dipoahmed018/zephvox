@@ -85,7 +85,8 @@ class Server:
             "id": account.id,
             "name": account.name,
             "limits": self.limits(account).model_dump(),
-            "usage": {"active_jobs": self.db.active_jobs(account.id)},
+            "usage": {"active_jobs": self.db.active_jobs(account.id),
+                      "storage_mb": round(self.db.storage_bytes(account.id) / (1024 * 1024), 1)},
             "webhook_secret": account.webhook_secret,
         }
 

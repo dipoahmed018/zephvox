@@ -68,6 +68,24 @@ CREATE TABLE IF NOT EXISTS deliveries (
     PRIMARY KEY (job_id, event)
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS synced (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    session_id TEXT NOT NULL,
+    origin TEXT NOT NULL,
+    updated REAL NOT NULL,
+    changed REAL NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    bytes INTEGER NOT NULL DEFAULT 0,
+    has_audio INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (account_id, session_id)
+);
+CREATE TABLE IF NOT EXISTS attempts (
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    changed REAL NOT NULL,
+    data TEXT NOT NULL,
+    PRIMARY KEY (account_id, key)
+);
 """
 
 ACTIVE = ("queued", "running")
@@ -326,3 +344,47 @@ class Database:
 
     def deliveries(self, job_id: str) -> list[dict[str, Any]]:
         return [dict(r) for r in self._all("SELECT * FROM deliveries WHERE job_id = ?", job_id)]
+
+    # --- synced history -----------------------------------------------------------------
+    # `updated`: when the session last changed on a device (wins conflicts); `changed`: when the
+    # server stored it (what `since` filters on, so a device never misses an older edit).
+
+    def synced(self, account_id: str, session_id: str) -> dict[str, Any] | None:
+        row = self._one("SELECT * FROM synced WHERE account_id = ? AND session_id = ?", account_id, session_id)
+        return dict(row) if row else None
+
+    def synced_since(self, account_id: str, since: float) -> list[dict[str, Any]]:
+        rows = self._all("SELECT * FROM synced WHERE account_id = ? AND changed > ? ORDER BY changed", account_id, since)
+        return [dict(r) for r in rows]
+
+    def put_synced(self, account_id: str, session_id: str, origin: str, updated: float, changed: float,
+                   deleted: bool = False, bytes: int | None = None, has_audio: bool | None = None) -> None:  # fmt: skip
+        with self.tx() as c:
+            row = c.execute("SELECT bytes, has_audio FROM synced WHERE account_id = ? AND session_id = ?",
+                            (account_id, session_id)).fetchone()  # fmt: skip
+            size = bytes if bytes is not None else (row["bytes"] if row else 0)
+            audio = has_audio if has_audio is not None else bool(row and row["has_audio"])
+            c.execute(
+                "INSERT INTO synced VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(account_id, session_id) DO UPDATE SET"
+                " origin = excluded.origin, updated = excluded.updated, changed = excluded.changed,"
+                " deleted = excluded.deleted, bytes = excluded.bytes, has_audio = excluded.has_audio",
+                (account_id, session_id, origin, updated, changed, int(deleted), size, int(audio)),
+            )
+
+    def storage_bytes(self, account_id: str) -> int:
+        row = self._one("SELECT COALESCE(SUM(bytes), 0) AS n FROM synced WHERE account_id = ? AND deleted = 0", account_id)
+        return int(row["n"]) if row else 0
+
+    def add_attempts(self, account_id: str, attempts: list[tuple[str, str]], changed: float) -> int:
+        """(key, json) pairs; ones already stored are skipped. Returns how many were new."""
+        with self.tx() as c:
+            before = c.total_changes
+            c.executemany("INSERT OR IGNORE INTO attempts VALUES (?, ?, ?, ?)",
+                          [(account_id, key, changed, data) for key, data in attempts])  # fmt: skip
+            return c.total_changes - before
+
+    def attempts_since(self, account_id: str, since: float) -> list[tuple[float, str]]:
+        rows = self._all("SELECT changed, data FROM attempts WHERE account_id = ? AND changed > ? ORDER BY changed",
+                         account_id, since)  # fmt: skip
+        return [(r["changed"], r["data"]) for r in rows]
+

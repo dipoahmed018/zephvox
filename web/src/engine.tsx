@@ -1,7 +1,7 @@
 // Live engine state for the whole page, fed by the daemon's event stream (/api/events).
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react";
 import { api } from "./api";
-import type { EngineMode, InstallProgress, PracticeAttempt, RemoteInfo, Status, Triggers } from "./types";
+import type { EngineMode, InstallProgress, PracticeAttempt, RemoteInfo, Status, SyncStatus, Triggers } from "./types";
 
 export const STAGE_LABELS: Record<string, string> = {
   upload: "Sending to the server",
@@ -37,6 +37,8 @@ export interface EngineState {
   remote: RemoteInfo | null;
   engineMode: EngineMode | null; // where analysis runs (from status, then remote_changed)
   install: InstallProgress | null;
+  sync: SyncStatus | null;
+  sessionsVersion: number; // bumps when sessions change outside an analysis (sync, offline queue)
   notices: Notice[];
 }
 
@@ -52,6 +54,8 @@ export const initialState: EngineState = {
   remote: null,
   engineMode: null,
   install: null,
+  sync: null,
+  sessionsVersion: 0,
   notices: [],
 };
 
@@ -133,6 +137,10 @@ function reduceServer(state: EngineState, event: string, d: Record<string, any>)
       return { ...state, remote: d.remote as RemoteInfo, engineMode: { mode: d.remote.mode, url: d.remote.url } };
     case "install":
       return { ...state, install: d as InstallProgress };
+    case "sync":
+      return { ...state, sync: d as SyncStatus };
+    case "sessions_changed":
+      return { ...state, sessionsVersion: state.sessionsVersion + 1 };
     case "install_output": {
       const log = [...(state.install?.log ?? []), d.line as string].slice(-200);
       return { ...state, install: { running: true, ok: null, ...state.install, log } };

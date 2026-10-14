@@ -100,6 +100,7 @@ class Daemon:
         self.practice_target: dict[str, Any] | None = None  # {"text": ..., "session_id": ...}
         self._backend: Any = None  # LocalBackend | RemoteBackend, built on first use
         self._backend_lock = threading.Lock()
+        self._sync: Any = None  # SyncWorker while a server is connected
         self.install = {"running": False, "ok": None, "log": []}
         self.analyzers_for_next: list[str] | None = None
         self.triggers: dict[str, Any] = {"driver": None, "active": False, "error": None, "description": ""}
@@ -109,6 +110,7 @@ class Daemon:
         self._ticker.start()
         if start_triggers:
             threading.Thread(target=self._start_triggers, name="triggers", daemon=True).start()
+        self._restart_sync()
 
     # --- events -------------------------------------------------------------------------
 
@@ -160,6 +162,36 @@ class Daemon:
             old, self._backend = self._backend, None
         if old is not None:
             old.close()
+        self._restart_sync()
+
+    # --- background sync: history backup and the offline queue -------------------------------
+
+    def _restart_sync(self) -> None:
+        from ..client import credentials
+        from ..client.backend import client_for
+        from ..client.sync import SyncWorker
+
+        old, self._sync = self._sync, None
+        if old is not None:
+            old.stop()
+        remote = self.engine.config.remote
+        if not remote.url or credentials.load(self.engine.config.engine.data_dir, remote.url) is None:
+            return
+        if remote.mode != "remote" and not remote.syncing:
+            return
+        self._sync = SyncWorker(self.engine, lambda: client_for(self.engine), history=remote.syncing,
+                                analyze_pending=self._analyze_pending if remote.mode == "remote" else None,
+                                publish=self.publish)  # fmt: skip
+        self._sync.start()
+
+    def sync_soon(self) -> None:
+        if self._sync is not None:
+            self._sync.trigger()
+
+    def _analyze_pending(self, session: Session, analyzers: list[str] | None) -> None:
+        """A recording queued while the server was unreachable (runs on the sync thread)."""
+        result = self.backend.analyze(session, analyzers)
+        self.publish("analysis_done", session_id=result.session_id, queued=True)
 
     # --- actions (shared by shortcuts, API and CLI) ---------------------------------------
 
@@ -189,8 +221,17 @@ class Daemon:
         return recording
 
     def _analyze(self, recording: Recording | Session, analyzers: list[str] | None):
-        result = self.backend.analyze(recording, analyzers)
+        from ..client.remote import QueuedOffline
+
+        try:
+            result = self.backend.analyze(recording, analyzers)
+        except QueuedOffline as e:
+            self.publish("warning", message=str(e).split(" (")[0])
+            self.publish("sessions_changed")
+            self.sync_soon()
+            return None
         self.publish("analysis_done", session_id=result.session_id)
+        self.sync_soon()
         return result
 
     def cancel(self) -> Recording:
@@ -233,11 +274,9 @@ class Daemon:
 
     def _analyze_path(self, path: Path, analyzers: list[str] | None):
         try:
-            result = self.backend.analyze(path, analyzers)
+            return self._analyze(path, analyzers)
         finally:
             path.unlink(missing_ok=True)
-        self.publish("analysis_done", session_id=result.session_id)
-        return result
 
     def set_practice_target(self, text: str | None, session_id: str | None = None) -> None:
         self.practice_target = {"text": text, "session_id": session_id} if text else None
@@ -294,6 +333,7 @@ class Daemon:
             "insecure": bool(remote.url) and is_insecure(remote.url),
             "engine_installed": self.engine_installed(),
             "install": {k: (v[-200:] if k == "log" else v) for k, v in self.install.items()},
+            "sync_status": dict(self._sync.status) if self._sync is not None else None,
             "reachable": None,
             "error": None,
         }
@@ -572,4 +612,7 @@ class Daemon:
                 pass
         self._worker.shutdown(wait=True, cancel_futures=True)
         self._reset_backend()
+        if self._sync is not None:
+            self._sync.stop()
+            self._sync = None
         self.engine.close()

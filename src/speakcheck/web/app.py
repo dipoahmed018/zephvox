@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -198,10 +199,19 @@ def create_app(daemon: Daemon) -> FastAPI:
 
     @app.get("/api/sessions")
     def sessions():
+        from ..client.sync import pending
+
         out = []
         for session in reversed(engine.sessions.list()):
             result = engine.sessions.load_result(session)
             if result is None:
+                if pending(session) is not None:  # recorded while the server was unreachable
+                    try:
+                        created = datetime.strptime(session.id[:15], "%Y%m%d-%H%M%S").isoformat()
+                    except ValueError:
+                        created = session.id
+                    out.append({"id": session.id, "created": created, "duration": None, "counts": {},
+                                "preview": "Waiting for the server…", "pending": True})  # fmt: skip
                 continue
             feedback = engine.sessions.load_feedback(session)
             counts: dict[str, int] = {}
@@ -225,6 +235,7 @@ def create_app(daemon: Daemon) -> FastAPI:
     @app.delete("/api/sessions/{sid}")
     def session_delete(sid: str):
         engine.sessions.delete(session_or_404(sid))
+        daemon.sync_soon()
         return {"deleted": sid}
 
     @app.get("/api/sessions/{sid}/audio")
@@ -247,7 +258,9 @@ def create_app(daemon: Daemon) -> FastAPI:
         result = engine.sessions.load_result(session)
         if result is None or not 0 <= index < len(result.findings):
             raise HTTPException(404, "No such finding")
-        return engine.sessions.set_feedback(session, index, body.verdict)
+        feedback = engine.sessions.set_feedback(session, index, body.verdict)
+        daemon.sync_soon()
+        return feedback
 
     # --- practice ----------------------------------------------------------------------------
 
