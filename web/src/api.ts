@@ -4,6 +4,7 @@ import type {
   Feedback,
   History,
   PracticeStats,
+  ProfilePreview,
   Profiles,
   Recording,
   RemoteInfo,
@@ -40,6 +41,7 @@ export const api = {
     request<Settings>("PUT", "/api/settings", changes),
   profiles: () => request<Profiles>("GET", "/api/profiles"),
   setProfile: (name: string) => request<Profiles>("PUT", "/api/profile", { name }),
+  previewProfile: (name: string) => request<ProfilePreview>("GET", `/api/profile/preview?name=${encodeURIComponent(name)}`),
   devices: () => request<{ provider: string; selected: string | null; devices: Device[] }>("GET", "/api/devices"),
   voices: () =>
     request<{ provider: string; selected: string | null; voices: { id: string; label: string }[] }>("GET", "/api/voices"),

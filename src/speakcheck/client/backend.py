@@ -6,6 +6,7 @@ the local session, so every page keeps working on local files.
 
 from __future__ import annotations
 
+import time
 import uuid
 from collections import OrderedDict
 from pathlib import Path
@@ -20,6 +21,7 @@ from ..engine.session import Session
 from . import credentials
 from .remote import PracticeStream, QueuedOffline, ServerClient, ServerError, ServerUnreachable
 
+OFFERED_TTL_S = 60.0
 RELAYED = ("stage_started", "stage_finished", "progress", "warning", "provider_fallback")
 TTS_CACHE = 256
 
@@ -77,6 +79,25 @@ class RemoteBackend:
         self.client = client
         self._stream: PracticeStream | None = None
         self._tts: OrderedDict[tuple[str, str], bytes] = OrderedDict()
+        self._offered: tuple[float, list[str]] | None = None
+
+    def _server_checks(self, wanted: list[str]) -> list[str]:
+        """The wanted analyzers the server can run (e.g. grammar needs its language model).
+        Asked at most once a minute; if the server can't say, everything is sent."""
+        now = time.monotonic()
+        if self._offered is None or now - self._offered[0] > OFFERED_TTL_S:
+            try:
+                self._offered = (now, list(self.client.health().get("analyzers", [])))
+            except ServerError:
+                return wanted
+        usable = [a for a in wanted if a in self._offered[1]]
+        skipped = [a for a in wanted if a not in usable]
+        if skipped:
+            self.engine.events.emit("warning", message=f"{' and '.join(skipped).capitalize()} isn't available on "
+                                                        "this server right now, so it was skipped.")  # fmt: skip
+        if not usable:
+            raise ServerError("the server can't run any of the selected checks right now")
+        return usable
 
     def _session(self, source: Source) -> Session:
         if isinstance(source, Session):
@@ -96,8 +117,8 @@ class RemoteBackend:
         events = self.engine.events
         events.emit("stage_started", stage="upload")
         try:
-            job = self.client.submit(session.audio_path, analyzers or self.engine.config.engine.analyzers,
-                                     idempotency_key=f"{session.id}-{uuid.uuid4().hex}")  # fmt: skip
+            checks = self._server_checks(list(analyzers or self.engine.config.engine.analyzers))
+            job = self.client.submit(session.audio_path, checks, idempotency_key=f"{session.id}-{uuid.uuid4().hex}")
             events.emit("stage_finished", stage="upload")
             done = self.client.wait(job["id"], lambda e: e["type"] in RELAYED and events.emit(e["type"], **e["data"]))
         except ServerUnreachable as e:

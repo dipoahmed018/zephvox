@@ -9,7 +9,7 @@ interface Voice {
 }
 
 /** Choose the reference voice used for "Hear it correctly" (saved in the engine's settings). */
-export function VoiceSelect() {
+export function VoiceSelect({ onSaved }: { onSaved?: () => void }) {
   const run = useAction();
   const [provider, setProvider] = useState("");
   const [voices, setVoices] = useState<Voice[]>([]);
@@ -28,12 +28,14 @@ export function VoiceSelect() {
 
   const change = async (voice: string) => {
     setSelected(voice);
-    await run(() => api.saveSettings({ tts: { provider, voice } }));
-    speak("Think about it.");
+    if (await run(() => api.saveSettings({ tts: { provider, voice } }))) {
+      onSaved?.();
+      speak("Think about it.");
+    }
   };
 
   return (
-    <span className="row" style={{ gap: 8 }}>
+    <span className="field-row">
       <select value={selected} onChange={(e) => change(e.target.value)} aria-label="Reference voice">
         {voices.map((v) => (
           <option key={v.id} value={v.id}>

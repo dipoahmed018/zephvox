@@ -273,3 +273,19 @@ class TestClientSetup:
                              detect=lambda root: None)  # fmt: skip
         with pytest.raises(SpeakcheckError, match="invite code is needed"):
             setup.run_all()
+
+
+class TestServerChecks:
+    def test_checks_the_server_cant_run_are_skipped(self, client_daemon, remote, engine, wav_file):
+        connected(client_daemon, remote)
+        remote.server.engine.config.providers["llm"] = []  # this server has no language model
+        remote.server._runnable = None  # (the server re-checks once a minute)
+        health = remote.tc.get("/v1/health").json()
+        assert "grammar" in health["installed"] and "grammar" not in health["analyzers"]
+        warnings = []
+        engine.events.subscribe(lambda e: e.type == "warning" and warnings.append(e.data["message"]))
+        result = client_daemon.backend.analyze(wav_file, ["pronunciation", "grammar"])
+        assert result.analyzers == ["pronunciation"]
+        assert warnings[0] == "Grammar isn't available on this server right now, so it was skipped."
+        with pytest.raises(SpeakcheckError, match="can't run any"):
+            client_daemon.backend.analyze(wav_file, ["grammar"])

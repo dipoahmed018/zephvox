@@ -89,6 +89,13 @@ class EventHub:
         queue.put_nowait(message)
 
 
+def installed_accelerator(root: Path | None) -> str | None:
+    """The PyTorch build setup installed (from .install.json)."""
+    from ..install.state import InstallState
+
+    return InstallState.load(root).accelerator if root else None
+
+
 class Daemon:
     def __init__(self, engine: Engine, start_triggers: bool = True):
         self.engine = engine
@@ -110,6 +117,8 @@ class Daemon:
         self._ticker.start()
         if start_triggers:
             threading.Thread(target=self._start_triggers, name="triggers", daemon=True).start()
+        # Hardware detection runs programs (rocminfo, nvidia-smi): do it now, not when the page asks.
+        threading.Thread(target=lambda: self.hardware, name="hardware", daemon=True).start()
         self._restart_sync()
 
     # --- events -------------------------------------------------------------------------
@@ -336,11 +345,13 @@ class Daemon:
             "sync_status": dict(self._sync.status) if self._sync is not None else None,
             "reachable": None,
             "error": None,
+            "server": None,
         }
         if check and remote.url:
             client = client_for(self.engine)
             try:
-                client.health()
+                health = client.health()
+                info["server"] = {k: health.get(k) for k in ("version", "analyzers", "installed", "tts", "source")}
                 info["reachable"] = True
                 if creds:
                     account = client.account()
@@ -523,12 +534,46 @@ class Daemon:
             "profiles": listed,
         }
 
-    def set_profile(self, name: str) -> dict[str, Any]:
-        """Switch profile now. Models load on next use; what can't happen here is listed in `needs`."""
+    def _profile_needs(self, profile: profiles.Profile, config: Any) -> tuple[list[str], float]:
+        """What switching to `profile` (giving `config`) still needs here, and the download size."""
         from ..install import ollama
         from ..install.download import plan_downloads
         from ..install.wizard import downloaded
 
+        needs, size = [], 0.0
+        root = project_root()
+        installed = installed_accelerator(root)
+        accelerator = profiles.accelerator(profile, self.hardware)
+        # A GPU build also runs on the CPU; only the cpu build can't serve a GPU profile.
+        if installed == "cpu" and accelerator != "cpu":
+            needs.append(f"This profile needs PyTorch for {accelerator}: run `speakcheck setup --profile {profile.name}`.")
+        for d in plan_downloads(config):
+            if d.source == "ollama":
+                if "grammar" in config.engine.analyzers and not ollama.has_model(d.name):
+                    needs.append(f"Grammar needs its model: run `ollama pull {d.name}`"
+                                 + (f" (~{d.approx_gb:g} GB)." if d.approx_gb else "."))  # fmt: skip
+                    size += d.approx_gb or 0
+            elif not downloaded(d):
+                needs.append(f"{d.name} downloads on first use" + (f" (~{d.approx_gb:g} GB)." if d.approx_gb else "."))
+                size += d.approx_gb or 0
+        return needs, round(size, 1)
+
+    def preview_profile(self, name: str) -> dict[str, Any]:
+        """What switching to a profile would change, without switching (for the page's confirmation)."""
+        from ..install.wizard import preview_config
+
+        path = self._config_path()
+        profile = profiles.get(name, path)
+        root = project_root()
+        config = preview_config(path, name, root / "config.example.toml" if root else path)
+        needs, size = self._profile_needs(profile, config)
+        return {"name": name, "llm_model": profile.llm_model if name != profiles.CUSTOM else
+                (config.provider_settings("openai-compat").get("model", "qwen3:8b")
+                 if "grammar" in config.engine.analyzers else None),
+                "accelerator": profiles.accelerator(profile, self.hardware), "needs": needs, "download_gb": size}  # fmt: skip
+
+    def set_profile(self, name: str) -> dict[str, Any]:
+        """Switch profile now. Models load on next use; what can't happen here is listed in `needs`."""
         profile = profiles.get(name, self._config_path())
         if self.busy or self.engine.is_recording():
             raise SpeakcheckError("finish the current recording or analysis first")
@@ -539,18 +584,17 @@ class Daemon:
         for kind in self.MODEL_KINDS:
             self.engine.release(kind)
         info = self.profiles()
-        needs = []
-        accelerator = profiles.accelerator(profile, self.hardware)
-        # A GPU build also runs on the CPU; only the cpu build can't serve a GPU profile.
-        if info["installed_accelerator"] == "cpu" and accelerator != "cpu":
-            needs.append(f"This profile needs PyTorch for {accelerator}: run `speakcheck setup --profile {name}`.")
-        for d in plan_downloads(self.engine.config):
-            if d.source == "ollama" and "grammar" in self.engine.config.engine.analyzers and not ollama.has_model(d.name):
-                needs.append(f"Grammar needs its model: run `ollama pull {d.name}`.")
-            elif d.source != "ollama" and not downloaded(d):
-                needs.append(f"{d.name} downloads on first use" + (f" (~{d.approx_gb:g} GB)." if d.approx_gb else "."))
+        needs, _ = self._profile_needs(profile, self.engine.config)
         self.publish("settings_changed", settings=self.settings())
         return {**info, "needs": needs}
+
+    def hardware_info(self) -> dict[str, Any]:
+        """This computer, detected the same way as setup (so names and sizes match)."""
+        hw = self.hardware
+        gpu = hw.gpu
+        return {"cpu": hw.cpu, "cores": hw.cores, "ram_gb": hw.ram_gb,
+                "gpu": None if gpu is None else {"name": gpu.name, "vram_gb": gpu.vram_gb, "backend": gpu.backend},
+                "accelerator": hw.accelerator, "notes": hw.notes}  # fmt: skip
 
     # --- background: levels, auto-stop, shortcuts -------------------------------------------
 
@@ -606,6 +650,7 @@ class Daemon:
             "practice_target": self.practice_target,
             "triggers": {**self.triggers, "bindings": self.engine.config.shortcuts},
             "engine": {"mode": self.engine.config.remote.mode, "url": self.engine.config.remote.url},
+            "hardware": self.hardware_info(),
             "pid": os.getpid(),
         }
 

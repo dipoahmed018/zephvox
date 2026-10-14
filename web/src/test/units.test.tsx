@@ -5,6 +5,7 @@ import { PhoneTiles } from "../components/PhoneTiles";
 import { ScoreRing } from "../components/ScoreRing";
 import { Transcript, pieces } from "../components/Transcript";
 import { WordInput } from "../components/WordInput";
+import { AnalyzerToggles } from "../components/AnalyzerToggles";
 import { initialState, reduce, type EngineState } from "../engine";
 import { fmtDuration, plural, scoreColor } from "../format";
 import { parseHash } from "../router";
@@ -203,5 +204,21 @@ describe("WordInput", () => {
     render(<WordInput />);
     await userEvent.type(screen.getByRole("textbox"), "123 !");
     expect(screen.getByRole("button", { name: /practice/i })).toBeDisabled();
+  });
+});
+
+describe("AnalyzerToggles", () => {
+  it("explains why the last check can't be turned off", async () => {
+    const changes: string[][] = [];
+    render(<AnalyzerToggles value={["pronunciation"]} onChange={(n) => changes.push(n)} />);
+    await userEvent.click(screen.getByRole("button", { name: /pronunciation/i }));
+    expect(changes).toEqual([]);
+    expect(screen.getByText("At least one check must stay on.")).toBeInTheDocument();
+  });
+
+  it("disables checks the server can't run", () => {
+    render(<AnalyzerToggles value={["pronunciation", "grammar"]} available={["pronunciation"]} onChange={() => {}} />);
+    expect(screen.getByRole("button", { name: /grammar/i })).toBeDisabled();
+    expect(screen.getByText(/Grammar isn't available on this server/)).toBeInTheDocument();
   });
 });

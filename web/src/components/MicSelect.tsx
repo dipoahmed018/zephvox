@@ -5,7 +5,7 @@ import { useAction } from "../engine";
 import type { Device } from "../types";
 
 /** Choose the microphone the engine records from (saved in the engine's settings). */
-export function MicSelect() {
+export function MicSelect({ onSaved }: { onSaved?: () => void }) {
   const run = useAction();
   const [provider, setProvider] = useState("");
   const [devices, setDevices] = useState<Device[]>([]);
@@ -22,12 +22,12 @@ export function MicSelect() {
 
   const change = async (device: string) => {
     setSelected(device);
-    await run(() => api.saveSettings({ capture: { provider, device: device || null } }));
+    if (await run(() => api.saveSettings({ capture: { provider, device: device || null } }))) onSaved?.();
   };
 
   const defaultName = devices.find((d) => d.is_default)?.name;
   return (
-    <label className="row" style={{ gap: 8 }}>
+    <label className="field-row">
       <Mic size={16} className="muted" />
       <span className="visually-hidden">Microphone</span>
       <select value={selected} onChange={(e) => change(e.target.value)} aria-label="Microphone">

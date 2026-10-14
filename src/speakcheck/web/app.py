@@ -150,6 +150,10 @@ def create_app(daemon: Daemon) -> FastAPI:
     def get_profiles():
         return daemon.profiles()
 
+    @app.get("/api/profile/preview")
+    def preview_profile(name: str):
+        return guard(daemon.preview_profile, name)
+
     @app.put("/api/profile")
     def put_profile(body: ProfileBody):
         return guard(daemon.set_profile, body.name)

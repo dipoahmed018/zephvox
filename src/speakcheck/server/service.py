@@ -29,6 +29,7 @@ from .webhooks import Deliverer
 
 SOURCE_URL = "https://github.com/dipoahmed018/speakcheck"  # AGPL: users of a hosted copy can get its source
 TTS_CACHE = 256
+RUNNABLE_TTL_S = 60.0
 
 
 def speakcheck_version() -> str:
@@ -64,6 +65,7 @@ class Server:
         self._tts: dict[str, TTSProvider] = {}
         self._tts_audio: OrderedDict[tuple[str, str], bytes] = OrderedDict()
         self._tts_lock = threading.Lock()
+        self._runnable: tuple[float, list[str]] | None = None
         if start:
             self.jobs.start()
             self.webhooks.start()
@@ -178,8 +180,38 @@ class Server:
 
     # --- health -------------------------------------------------------------------------
 
+    def installed_analyzers(self) -> list[str]:
+        practice = self.engine.config.engine.practice_analyzer
+        return [a for a in self.engine.registry.names("analyzers") if a != practice]
+
+    def runnable_analyzers(self) -> list[str]:
+        """Analyzers whose providers can run right now (e.g. no grammar without a language model).
+        Checked at most once a minute."""
+        from ..engine.planner import plan
+
+        now = self.clock()
+        if self._runnable is not None and now - self._runnable[0] < RUNNABLE_TTL_S:
+            return self._runnable[1]
+        out = []
+        for name in self.installed_analyzers():
+            cls = self.engine.registry.get("analyzers", name)
+            kinds = plan([(cls.needs, cls.uses)], self.engine.artifacts).provider_kinds
+            if all(self._kind_available(kind) for kind in kinds):
+                out.append(name)
+        self._runnable = (now, out)
+        return out
+
+    def _kind_available(self, kind: str) -> bool:
+        for name in self.engine.config.providers.get(kind, []):
+            try:
+                if self.engine.build_provider(kind, name).check_available().ok:
+                    return True
+            except Exception:  # an unknown or broken plugin: try the next one
+                continue
+        return False
+
     def health(self) -> dict[str, Any]:
-        analyzers = [a for a in self.engine.registry.names("analyzers") if a != self.engine.config.engine.practice_analyzer]
+        analyzers = self.runnable_analyzers()
         try:
             tts = bool(self.engine.config.providers.get("tts")) and self._tts_provider(None) is not None
         except SpeakcheckError:
@@ -187,7 +219,8 @@ class Server:
         return {
             "service": "speakcheck",
             "version": speakcheck_version(),
-            "analyzers": analyzers,
+            "analyzers": analyzers,  # can run now
+            "installed": self.installed_analyzers(),
             "default_analyzers": self.engine.config.engine.analyzers,
             "practice": True,
             "tts": tts,

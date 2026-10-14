@@ -147,7 +147,7 @@ def create_server_app(server: Server) -> FastAPI:
         if idempotency_key and (existing := _existing(idempotency_key, who)):
             return _accepted(existing, server)
         names = [a.strip() for a in analyzers.split(",") if a.strip()]
-        known = set(server.health()["analyzers"])
+        known = set(server.installed_analyzers())
         if unknown := [a for a in names if a not in known]:
             raise HTTPException(422, f"unknown analyzer(s): {', '.join(unknown)}; available: {', '.join(sorted(known))}")
         if webhook_url:

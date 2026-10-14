@@ -1,4 +1,4 @@
-import { Cpu, Keyboard, Mic, Puzzle } from "lucide-react";
+import { ChevronRight, Cpu, Keyboard, Mic, Puzzle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { LICENSE_NAME, SOURCE_URL } from "../about";
 import { api } from "../api";
@@ -6,9 +6,10 @@ import { AnalyzerToggles } from "../components/AnalyzerToggles";
 import { EngineCard } from "../components/EngineCard";
 import { MicSelect } from "../components/MicSelect";
 import { ProfileCard } from "../components/ProfileCard";
+import { SavedMark, useSaved } from "../components/Saved";
 import { VoiceSelect } from "../components/VoiceSelect";
 import { useAction, useEngine } from "../engine";
-import type { Status as StatusData } from "../types";
+import type { ServerInfo, Status as StatusData } from "../types";
 
 const ACTION_LABELS: Record<string, string> = {
   toggle_recording: "Start / stop recording",
@@ -26,32 +27,45 @@ const KIND_LABELS: Record<string, string> = {
   triggers: "Shortcuts",
 };
 
+function LocalChip({ show }: { show: boolean }) {
+  return show ? <span className="chip">on this computer</span> : null;
+}
+
 export function Status() {
   const { state } = useEngine();
   const run = useAction();
+  const saved = useSaved();
   const [status, setStatus] = useState<StatusData | null>(null);
   const [analyzers, setAnalyzers] = useState<string[]>([]);
+  const [server, setServer] = useState<ServerInfo | null>(null);
+
+  const remote = state.engineMode?.mode === "remote";
 
   useEffect(() => {
     run(api.status).then((s) => s && setStatus(s));
     run(api.settings).then((s) => s && setAnalyzers(s.analyzers.filter((a) => a !== "practice")));
   }, []);
+  // In client mode, offer only the checks the server can run.
+  useEffect(() => {
+    if (remote) run(() => api.remote(true)).then((r) => r && setServer(r.server));
+    else setServer(null);
+  }, [remote]);
 
   const triggers = state.triggers ?? status?.triggers;
-  const gpu = status?.doctor.system.gpu;
-  const remote = state.engineMode?.mode === "remote";
-  // In client mode the server does the analysis: only this computer's own drivers matter here.
+  const hw = status?.hardware;
+  // In client mode the server does the analysis: only this computer's own drivers matter.
   const kinds = remote ? ["capture", "triggers"] : Object.keys(KIND_LABELS);
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>Settings & status</h1>
+          <h1>Settings</h1>
           <p>
-            {state.engineMode?.mode === "remote"
+            {remote
               ? "This computer records; a speakcheck server does the analysis."
-              : "What speakcheck is using on this computer."}
+              : "Recording, models, and where analysis runs."}{" "}
+            <span className="faint">Changes are saved and applied right away.</span>
           </p>
         </div>
       </div>
@@ -61,25 +75,30 @@ export function Status() {
             <div className="card-title">
               <Mic size={18} color="var(--accent)" />
               <h2>Recording</h2>
+              <LocalChip show={remote} />
             </div>
             <dl className="kv">
               <dt>Microphone</dt>
-              <dd>
-                <MicSelect />
+              <dd className="field-row">
+                <MicSelect onSaved={() => saved.flash("mic")} />
+                <SavedMark show={saved.is("mic")} />
               </dd>
               <dt>Reference voice</dt>
-              <dd>
-                <VoiceSelect />
+              <dd className="field-row">
+                <VoiceSelect onSaved={() => saved.flash("voice")} />
+                <SavedMark show={saved.is("voice")} />
               </dd>
               <dt>Check for</dt>
-              <dd>
+              <dd className="field-row" style={{ alignItems: "flex-start" }}>
                 <AnalyzerToggles
                   value={analyzers}
-                  onChange={(next) => {
+                  available={remote && server ? server.analyzers : undefined}
+                  onChange={async (next) => {
                     setAnalyzers(next);
-                    run(() => api.saveSettings({ analyzers: next }));
+                    if (await run(() => api.saveSettings({ analyzers: next }))) saved.flash("analyzers");
                   }}
                 />
+                <SavedMark show={saved.is("analyzers")} />
               </dd>
             </dl>
           </div>
@@ -87,6 +106,7 @@ export function Status() {
             <div className="card-title">
               <Keyboard size={18} color="var(--accent)" />
               <h2>Shortcuts</h2>
+              <LocalChip show={remote} />
             </div>
             {triggers ? (
               <>
@@ -124,23 +144,49 @@ export function Status() {
         </div>
         <div className="stack">
           <EngineCard />
-          {state.engineMode?.mode !== "remote" && <ProfileCard />}
-          <div className="card">
-            <div className="card-title">
-              <Cpu size={18} color="var(--accent)" />
-              <h2>Hardware</h2>
+          {!remote && <ProfileCard />}
+        </div>
+      </div>
+
+      <details className="card diagnostics">
+        <summary>
+          <ChevronRight size={18} className="diagnostics-chevron" />
+          <h2>Diagnostics</h2>
+          <span className="faint">{remote ? "drivers on this computer" : "hardware and drivers"}</span>
+        </summary>
+        <div className="grid-2" style={{ marginTop: 14 }}>
+          {!remote && (
+            <div>
+              <div className="card-title">
+                <Cpu size={18} color="var(--accent)" />
+                <h3>Hardware</h3>
+              </div>
+              <dl className="kv">
+                <dt>Graphics card</dt>
+                <dd>
+                  {hw
+                    ? hw.gpu
+                      ? `${hw.gpu.name}${hw.gpu.vram_gb ? `, ${hw.gpu.vram_gb.toFixed(0)} GB` : ""}` +
+                        (hw.gpu.backend ? ` (${hw.gpu.backend.toUpperCase()})` : " (not usable for the models here)")
+                      : "none: models run on the CPU"
+                    : "…"}
+                </dd>
+                <dt>Processor</dt>
+                <dd>{hw ? `${hw.cpu} (${hw.cores} threads)` : "…"}</dd>
+                <dt>Memory</dt>
+                <dd>{hw ? `${hw.ram_gb.toFixed(0)} GB` : "…"}</dd>
+              </dl>
+              {hw?.notes.map((n) => (
+                <p key={n} className="error-text">
+                  {n}
+                </p>
+              ))}
             </div>
-            <dl className="kv">
-              <dt>Graphics card</dt>
-              <dd>{status ? (gpu ? `${gpu.name} (${gpu.backend.toUpperCase()}, ${gpu.vram_gb.toFixed(0)} GB)` : "none — using CPU") : "…"}</dd>
-              <dt>Memory</dt>
-              <dd>{status ? `${status.doctor.system.ram_gb.toFixed(0)} GB` : "…"}</dd>
-            </dl>
-          </div>
-          <div className="card">
+          )}
+          <div>
             <div className="card-title">
               <Puzzle size={18} color="var(--accent)" />
-              <h2>Drivers</h2>
+              <h3>Drivers</h3>
             </div>
             {status ? (
               <table className="driver-table">
@@ -173,24 +219,24 @@ export function Status() {
               <p className="muted">Checking drivers…</p>
             )}
             {remote && (
-              <p className="muted" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
+              <p className="muted" style={{ fontSize: "0.85rem" }}>
                 Speech recognition, sounds, grammar and voices run on the server.
               </p>
             )}
-            <p className="faint" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
+            <p className="faint" style={{ fontSize: "0.85rem" }}>
               ★ in use · ✗ unavailable (hover for why). Change drivers in <code>config.toml</code> in the speakcheck
               folder (see <code>config.example.toml</code>).
             </p>
-            <p className="faint" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
-              speakcheck is free software under the {LICENSE_NAME} license:{" "}
-              <a href={SOURCE_URL} target="_blank" rel="noreferrer">
-                source code
-              </a>
-              .
-            </p>
           </div>
         </div>
-      </div>
+        <p className="faint" style={{ marginBottom: 0, fontSize: "0.85rem" }}>
+          speakcheck is free software under the {LICENSE_NAME} license:{" "}
+          <a href={SOURCE_URL} target="_blank" rel="noreferrer">
+            source code
+          </a>
+          .
+        </p>
+      </details>
     </>
   );
 }

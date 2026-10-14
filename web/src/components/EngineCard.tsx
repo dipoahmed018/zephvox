@@ -128,6 +128,15 @@ export function EngineCard() {
             <span className="muted">
               This device: {info.device ?? "?"} · account {info.account ?? "?"}
             </span>
+            {info.server && (
+              <>
+                <br />
+                <span className="faint">
+                  speakcheck {info.server.version} · checks {info.server.analyzers.join(" and ") || "nothing right now"}
+                  {" · "}models chosen by the server's admin
+                </span>
+              </>
+            )}
           </p>
           {info.reachable === false && <p className="error-text">The server can't be reached right now.</p>}
           {info.error && info.reachable && <p className="error-text">{info.error}</p>}

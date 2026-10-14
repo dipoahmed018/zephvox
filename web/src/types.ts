@@ -128,6 +128,7 @@ export interface Status {
   practice_target: { text: string; session_id: string | null } | null;
   triggers: Triggers;
   engine?: EngineMode;
+  hardware?: HardwareInfo;
   doctor: {
     system: { gpu: { backend: string; name: string; vram_gb: number } | null; ram_gb: number };
     providers: ProviderStatus[];
@@ -174,6 +175,31 @@ export interface History {
   targets: Record<string, [string, number][]>;
 }
 
+export interface HardwareInfo {
+  cpu: string;
+  cores: number;
+  ram_gb: number;
+  gpu: { name: string; vram_gb: number | null; backend: string | null } | null;
+  accelerator: string;
+  notes: string[];
+}
+
+export interface ServerInfo {
+  version: string;
+  analyzers: string[]; // can run now
+  installed: string[];
+  tts: boolean;
+  source: string;
+}
+
+export interface ProfilePreview {
+  name: string;
+  llm_model: string | null;
+  accelerator: string;
+  needs: string[];
+  download_gb: number;
+}
+
 export interface EngineMode {
   mode: "local" | "remote";
   url: string | null;
@@ -199,4 +225,5 @@ export interface RemoteInfo {
   sync_status: SyncStatus | null;
   reachable: boolean | null;
   error: string | null;
+  server: ServerInfo | null;
 }

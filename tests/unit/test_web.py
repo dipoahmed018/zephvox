@@ -564,3 +564,21 @@ class TestProfilesApi:
         assert any("setup --profile large" in n for n in needs)
         needs = api.put("/api/profile", json={"name": "cpu"}).json()["needs"]
         assert not any("PyTorch" in n for n in needs)
+
+
+def test_profile_preview_changes_nothing_and_status_has_hardware(daemon, monkeypatch, tmp_path):
+    from speakcheck.engine.hardware import GPU, Hardware
+    from speakcheck.web import daemon as daemon_mod
+
+    hw = Hardware("linux", "x86_64", "Test CPU", 8, 32.0, 100.0, [GPU("amd", "RX 6800 XT", 16.0, "rocm")])
+    daemon.__dict__["hardware"] = hw
+    monkeypatch.setattr(daemon_mod, "project_root", lambda: None)
+    config_path = tmp_path / "config.toml"
+    config_path.write_text('profile = "large"\n')
+    daemon.engine.config = daemon.engine.config.model_copy(update={"source": config_path})
+    preview = daemon.preview_profile("small")
+    assert preview["name"] == "small" and preview["llm_model"] == "qwen3:4b" and preview["accelerator"] == "rocm"
+    assert isinstance(preview["needs"], list) and "download_gb" in preview
+    assert config_path.read_text() == 'profile = "large"\n'  # only a preview
+    info = daemon.status()["hardware"]
+    assert info["gpu"] == {"name": "RX 6800 XT", "vram_gb": 16.0, "backend": "rocm"} and info["cores"] == 8

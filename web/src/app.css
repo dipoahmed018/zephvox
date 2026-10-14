@@ -345,6 +345,107 @@ select,
   font-size: 0.88rem;
 }
 
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.field-row select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  text-overflow: ellipsis;
+}
+
+.field-row > label,
+.field-row > span:not(.saved-mark),
+.field-row > .stack {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.field-row svg {
+  flex: none;
+}
+
+.saved-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  color: var(--success);
+  font-size: 0.85rem;
+  opacity: 0;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.saved-mark.show {
+  opacity: 1;
+}
+
+.card-title .saved-mark {
+  margin-left: auto;
+}
+
+.profile-list.compact .profile-option {
+  width: 100%;
+  padding: 10px 14px;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-meta {
+  margin-left: auto;
+}
+
+.confirm-panel {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px dashed var(--accent);
+  background: var(--raised);
+}
+
+.diagnostics summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.diagnostics summary::-webkit-details-marker {
+  display: none;
+}
+
+.diagnostics summary h2 {
+  margin: 0;
+}
+
+.diagnostics-chevron {
+  color: var(--accent);
+  transition: transform 0.15s;
+}
+
+.diagnostics[open] .diagnostics-chevron {
+  transform: rotate(90deg);
+}
+
+.card-title h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
 .engine-panel {
   margin-top: 14px;
   padding-top: 14px;
@@ -1047,7 +1148,7 @@ select,
 
 .kv {
   display: grid;
-  grid-template-columns: 160px 1fr;
+  grid-template-columns: 130px minmax(0, 1fr);
   gap: 10px 16px;
   align-items: center;
 }
