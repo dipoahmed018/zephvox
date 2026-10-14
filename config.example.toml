@@ -125,6 +125,7 @@
 # --- server mode (`speakcheck server serve`) ----------------------------------------------
 
 [server]
+# share = false               # serve other devices whenever the app runs ("Share this computer" in the page)
 # host = "127.0.0.1"          # 0.0.0.0 to listen on every interface (put HTTPS in front: Caddy, nginx)
 # port = 8770
 # data_dir = "~/.local/share/speakcheck/server"   # accounts, jobs (default: <engine data_dir>/server)

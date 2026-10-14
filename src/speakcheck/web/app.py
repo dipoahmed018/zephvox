@@ -50,6 +50,10 @@ class ConfigBody(BaseModel):
     changes: list[ConfigChange]
 
 
+class SharingBody(BaseModel):
+    on: bool
+
+
 class ModelBody(BaseModel):
     name: str
 
@@ -182,6 +186,24 @@ def create_app(daemon: Daemon) -> FastAPI:
     @app.put("/api/config")
     def put_config(body: ConfigBody):
         return jsonable(guard(daemon.update_config, [c.model_dump() for c in body.changes]))
+
+    @app.get("/api/sharing")
+    def sharing():
+        return jsonable(guard(daemon.sharing_info))
+
+    @app.put("/api/sharing")
+    def put_sharing(body: SharingBody):
+        return jsonable(guard(daemon.set_sharing, body.on))
+
+    @app.post("/api/sharing/{action}")
+    def sharing_action(action: str, body: dict[str, Any]):
+        return jsonable(guard(daemon.sharing_action, action, body))
+
+    @app.post("/api/sharing/service/{op}")
+    def sharing_service(op: str):
+        if op not in ("install", "remove"):
+            raise HTTPException(404, "install or remove")
+        return guard(daemon.service_action, op == "install")
 
     @app.post("/api/models/pull")
     def pull_model(body: ModelBody):

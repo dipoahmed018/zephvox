@@ -41,6 +41,7 @@ export interface EngineState {
   sync: SyncStatus | null;
   sessionsVersion: number; // bumps when sessions change outside an analysis (sync, offline queue)
   configVersion: number; // bumps when options change (here, in another tab, or a profile switch)
+  sharingVersion: number; // bumps when sharing or its accounts change
   downloads: Record<string, ModelDownload>; // grammar models being downloaded
   notices: Notice[];
 }
@@ -61,6 +62,7 @@ export const initialState: EngineState = {
   sync: null,
   sessionsVersion: 0,
   configVersion: 0,
+  sharingVersion: 0,
   downloads: {},
   notices: [],
 };
@@ -154,6 +156,8 @@ function reduceServer(state: EngineState, event: string, d: Record<string, any>)
       return { ...state, sessionsVersion: state.sessionsVersion + 1 };
     case "config_changed":
       return { ...state, configVersion: state.configVersion + 1 };
+    case "sharing_changed":
+      return { ...state, sharingVersion: state.sharingVersion + 1 };
     case "model_download":
       return { ...state, downloads: { ...state.downloads, [d.name]: d as ModelDownload } };
     case "install_output": {

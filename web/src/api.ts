@@ -3,6 +3,7 @@ import type {
   ConfigChange,
   ConfigInfo,
   ModelDownload,
+  SharingInfo,
   Device,
   Feedback,
   History,
@@ -89,6 +90,11 @@ export const api = {
   config: () => request<ConfigInfo>("GET", "/api/config"),
   saveConfig: (changes: ConfigChange[]) => request<ConfigInfo>("PUT", "/api/config", { changes }),
   pullModel: (name: string) => request<ModelDownload>("POST", "/api/models/pull", { name }),
+
+  sharing: () => request<SharingInfo>("GET", "/api/sharing"),
+  setSharing: (on: boolean) => request<SharingInfo>("PUT", "/api/sharing", { on }),
+  sharingAction: (action: string, body: Record<string, unknown>) => request<SharingInfo>("POST", `/api/sharing/${action}`, body),
+  sharingService: (op: "install" | "remove") => request<{ service: string }>("POST", `/api/sharing/service/${op}`),
 };
 
 export const urls = {

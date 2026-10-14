@@ -44,6 +44,8 @@ const LABELS: Record<string, string> = {
   practice_workers: "Practice threads",
   job_ttl_hours: "Keep finished jobs",
   requests_per_minute: "Requests per minute",
+  data_dir: "Folder for its data",
+  max_upload_mb: "Largest upload (MB)",
 };
 
 export function humanize(key: string): string {

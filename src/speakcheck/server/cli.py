@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import re
 import subprocess
-import shutil
 import sys
 import time
 from collections.abc import Callable
@@ -19,6 +18,7 @@ from typing import Any
 
 from ..engine.config import Config
 from ..engine.errors import SpeakcheckError
+from . import admin
 from . import limits as limits_mod
 from .db import Database
 from .service import server_dir
@@ -142,22 +142,14 @@ def _admin(args: argparse.Namespace, config: Config, db: Database, ask: Callable
             devices = [d for d in db.devices(acc.id) if d.revoked is None]
             print(f"{acc.name:<24} {acc.id}  {len(devices)} device(s)  created {when(acc.created)}")
     elif command == "accounts" and action == "add":
-        try:
-            acc = db.add_account(args.name, clock())
-        except ValueError as e:
-            raise SpeakcheckError(str(e)) from e
+        acc = admin.add_account(db, args.name, clock())
         print(f"Added {acc.name} ({acc.id}). Connect a device with: speakcheck server invite {acc.name}")
     elif command == "accounts" and action == "remove":
         acc = _account(db, args.account)
         if not args.yes and ask(f"Delete {acc.name} with all its devices, jobs and data? [y/N] ").strip().lower() not in ("y", "yes"):
             print("Nothing deleted.")
             return 1
-        root = server_dir(config)
-        for job in db.jobs(acc.id):
-            shutil.rmtree(root / "jobs" / job.id, ignore_errors=True)
-        shutil.rmtree(root / "accounts" / acc.id, ignore_errors=True)
-        db.remove_account(acc.id)
-        print(f"Deleted {acc.name}.")
+        print(f"Deleted {admin.remove_account(db, config, acc.id)}.")
     elif command == "invite":
         acc = _account(db, args.account)
         ttl = parse_duration(args.expires)
@@ -187,13 +179,8 @@ def _admin(args: argparse.Namespace, config: Config, db: Database, ask: Callable
             length = f"{j.duration / 60:.1f} min" if j.duration else "-"
             print(f"{j.id}  {names.get(j.account_id, '?'):<16} {j.status:<9} {length:>9}  {when(j.created)}  {j.error or ''}")
     elif command == "jobs" and action == "cancel":
-        job = db.job(args.job)
-        if job is None:
-            raise SpeakcheckError(f"no job {args.job!r}")
-        if job.status not in ("queued", "running"):
-            raise SpeakcheckError(f"job {job.id} is already {job.status}")
-        db.update_job(job.id, status="cancelled", finished=clock(), expires=clock())  # the janitor removes it
-        print(f"Cancelled {job.id}.")
+        admin.cancel_job(db, args.job, clock())
+        print(f"Cancelled {args.job}.")
     elif command == "webhook-secret":
         acc = _account(db, args.account)
         print(db.rotate_webhook_secret(acc.id) if args.rotate else acc.webhook_secret)

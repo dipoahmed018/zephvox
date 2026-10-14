@@ -787,3 +787,63 @@ class TestConfigApi:
         assert api.post("/api/models/pull", json={"name": "bad name; rm"}).status_code == 409
         monkeypatch.setattr(ollama, "find", lambda: None)
         assert "isn't installed" in api.post("/api/models/pull", json={"name": "qwen3:4b"}).json()["detail"]
+
+
+class TestSharing:
+    """Share this computer: the server inside the app, and its admin, from the Settings page."""
+
+    @pytest.fixture
+    def port(self):
+        import socket
+
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+    def test_share_admin_and_stop(self, api, daemon, port):
+        daemon.engine.config.server.port = port
+        out = api.put("/api/sharing", json={"on": True}).json()
+        assert out["running"] and out["urls"] == [f"http://127.0.0.1:{port}"] and out["enabled"]
+        assert httpx.get(f"http://127.0.0.1:{port}/v1/health").json()["service"] == "speakcheck"
+
+        added = api.post("/api/sharing/add_account", json={"name": "alice"}).json()
+        code = added["invite"]["code"]
+        assert code.startswith("inv_") and [a["name"] for a in added["accounts"]] == ["alice"]
+        key = httpx.post(f"http://127.0.0.1:{port}/v1/devices/redeem", json={"invite": code, "device_name": "laptop"}).json()["key"]
+        info = api.get("/api/sharing").json()
+        [device] = info["accounts"][0]["devices"]
+        assert device["name"] == "laptop" and device["revoked"] is None
+
+        api.post("/api/sharing/set_limits", json={"account": "alice", "changes": {"max_jobs": 5}})
+        api.post("/api/sharing/set_limits", json={"account": None, "changes": {"storage_mb": 100}})
+        info = api.get("/api/sharing").json()
+        assert info["accounts"][0]["limits"]["max_jobs"] == 5 and info["accounts"][0]["overrides"] == {"max_jobs": 5}
+        assert info["defaults"]["limits"]["storage_mb"] == 100 and info["accounts"][0]["limits"]["storage_mb"] == 100
+        assert api.post("/api/sharing/set_limits", json={"changes": {"bogus": 1}}).status_code == 409
+        old = info["accounts"][0]["webhook_secret"]
+        assert api.post("/api/sharing/rotate_secret", json={"account": "alice"}).json()["accounts"][0]["webhook_secret"] != old
+        api.post("/api/sharing/revoke_device", json={"device": device["id"]})
+        assert httpx.get(f"http://127.0.0.1:{port}/v1/account", headers={"Authorization": f"Bearer {key}"}).status_code == 401
+        assert api.post("/api/sharing/invite", json={"account": "alice", "days": 0}).status_code == 409
+        assert "needs 'account'" in api.post("/api/sharing/invite", json={}).json()["detail"]
+
+        out = api.put("/api/sharing", json={"on": False}).json()
+        assert not out["running"] and not out["enabled"]
+        with pytest.raises(httpx.HTTPError):
+            httpx.get(f"http://127.0.0.1:{port}/v1/health", timeout=1)
+        daemon.engine.provider("stt")  # the app's engine still works after the server stopped
+        # Admin works with sharing off too (straight on the database), and accounts can be removed.
+        assert api.post("/api/sharing/remove_account", json={"account": "alice"}).json()["accounts"] == []
+
+    def test_a_taken_port_is_explained(self, api, daemon, port):
+        import socket
+
+        daemon.engine.config.server.port = port
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", port))
+            s.listen()
+            assert "already in use" in api.put("/api/sharing", json={"on": True}).json()["detail"]
+
+    def test_client_mode_cant_share(self, api, daemon):
+        daemon.engine.config.remote.mode = "remote"
+        assert "can't share" in api.put("/api/sharing", json={"on": True}).json()["detail"]

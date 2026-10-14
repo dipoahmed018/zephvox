@@ -151,6 +151,8 @@ class ServerSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    # Serve other devices whenever the app runs (the page's "Share this computer" switch).
+    share: bool = False
     host: str = "127.0.0.1"
     port: int = 8770
     data_dir: Path | None = None  # default: <engine.data_dir>/server

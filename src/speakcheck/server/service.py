@@ -50,8 +50,9 @@ def server_dir(config: Config) -> Path:
 
 class Server:
     def __init__(self, engine: Engine, settings: ServerSettings | None = None, clock: Callable[[], float] = time.time,
-                 start: bool = True, http: httpx.Client | None = None):  # fmt: skip
+                 start: bool = True, http: httpx.Client | None = None, owns_engine: bool = True):  # fmt: skip
         self.engine = engine
+        self.owns_engine = owns_engine  # False inside the app ("Share this computer"): the app keeps using it
         self.settings = settings or engine.config.server
         self.clock = clock
         self.root = Path(self.settings.data_dir).expanduser() if self.settings.data_dir else server_dir(engine.config)
@@ -74,7 +75,8 @@ class Server:
         self.jobs.stop()
         self.webhooks.stop()
         self.practice_pool.shutdown(wait=False, cancel_futures=True)
-        self.engine.close()
+        if self.owns_engine:
+            self.engine.close()
         self.db.close()
 
     # --- accounts -----------------------------------------------------------------------

@@ -116,6 +116,10 @@ class Daemon:
         # Without a config file (tests, embedding) the config as given is the base for page changes.
         self._initial_config = engine.config
         self.downloads: dict[str, dict[str, Any]] = {}  # grammar models being pulled, by name
+        self._sharing: Any = None  # the server inside the app ("Share this computer"), while on
+        self._admin_db: Any = None
+        if start_triggers and engine.config.server.share:  # turned on earlier: serve again
+            threading.Thread(target=self._start_sharing_quietly, name="sharing-start", daemon=True).start()
         self._shortcut_pending: set[str] = set()  # "analysis" / "practice": announce the result
         self.analyzing: str | None = None  # session being analyzed right now
         self._backend: Any = None  # LocalBackend | RemoteBackend, built on first use
@@ -437,6 +441,11 @@ class Daemon:
                 continue  # shortcuts restart below; a recording keeps its microphone
             self.engine.release(kind)
         self.notify.enabled = new.engine.notifications
+        if self._sharing is not None and self._sharing.running and (
+                (old.server.host, old.server.port) != (new.server.host, new.server.port)):  # fmt: skip
+            self._sharing.stop()
+            self._sharing = None
+            threading.Thread(target=self._start_sharing_quietly, name="sharing-restart", daemon=True).start()
         changed = {a: k for a, k in new.shortcuts.items() if old.shortcuts.get(a) != k}
         if old.providers.get("triggers") != new.providers.get("triggers"):
             self._restart_triggers()
@@ -553,6 +562,114 @@ class Daemon:
 
         threading.Thread(target=run, name=f"pull-{name}", daemon=True).start()
         return state
+
+    # --- sharing this computer (the server inside the app) and its admin -------------------------
+
+    def _db(self) -> Any:
+        """The server's database: the running server's, or one opened just for admin."""
+        if self._sharing is not None and self._sharing.server is not None:
+            return self._sharing.server.db
+        if self._admin_db is None:
+            from ..server.db import Database
+            from ..server.service import server_dir
+
+            self._admin_db = Database(server_dir(self.engine.config) / "server.db")
+        return self._admin_db
+
+    def _start_sharing_quietly(self) -> None:
+        try:
+            self.start_sharing()
+        except SpeakcheckError as e:
+            self.publish("warning", message=f"Couldn't share this computer: {e}")
+
+    def start_sharing(self) -> dict[str, Any]:
+        from ..server.embedded import EmbeddedServer
+
+        if self.engine.config.remote.mode == "remote":
+            raise SpeakcheckError("This computer uses a server for analysis; it can't share its own engine.")
+        if self._admin_db is not None:
+            self._admin_db.close()
+            self._admin_db = None
+        if self._sharing is None:
+            self._sharing = EmbeddedServer(self.engine)
+        settings = self.engine.config.server
+        self._sharing.start(settings.host, settings.port)
+        self.publish("sharing_changed")
+        return self.sharing_info()
+
+    def stop_sharing(self) -> dict[str, Any]:
+        if self._sharing is not None:
+            self._sharing.stop()
+            self._sharing = None
+        self.publish("sharing_changed")
+        return self.sharing_info()
+
+    def set_sharing(self, on: bool) -> dict[str, Any]:
+        """The Share switch: start or stop now, and remember it for the next start of the app."""
+        self.start_sharing() if on else self.stop_sharing()
+        self.update_config([{"path": ["server", "share"], "value": True} if on else {"path": ["server", "share"], "reset": True}])
+        return self.sharing_info()
+
+    def sharing_info(self) -> dict[str, Any]:
+        from ..server import admin
+        from ..server.embedded import EmbeddedServer
+
+        state = self._sharing.info() if self._sharing is not None else EmbeddedServer(self.engine).info()
+        settings = self.engine.config.server
+        return {**state, "enabled": settings.share, "host_setting": settings.host, "port_setting": settings.port,
+                "remote": self.engine.config.remote.mode == "remote", **admin.overview(self._db(), self.engine.config)}  # fmt: skip
+
+    def sharing_action(self, action: str, body: dict[str, Any]) -> dict[str, Any]:
+        """Accounts, invites, devices, limits, jobs and webhook secrets (as `speakcheck server …`)."""
+        from ..server import admin
+
+        try:
+            return self._sharing_action(action, body)
+        except KeyError as e:
+            raise SpeakcheckError(f"{action} needs {e.args[0]!r}") from None
+
+    def _sharing_action(self, action: str, body: dict[str, Any]) -> dict[str, Any]:
+        from ..server import admin
+
+        db, now, out = self._db(), time.time(), {}
+        if action == "add_account":
+            account = admin.add_account(db, str(body.get("name", "")), now)
+            out["invite"] = admin.invite(db, account.id, now, 7 * 86400)
+        elif action == "remove_account":
+            admin.remove_account(db, self.engine.config, str(body["account"]))
+        elif action == "invite":
+            days = float(body.get("days", 7))
+            if not 0 < days <= 365:
+                raise SpeakcheckError("an invite can be valid for 1 to 365 days")
+            out["invite"] = admin.invite(db, str(body["account"]), now, days * 86400)
+        elif action == "revoke_device":
+            admin.revoke_device(db, str(body["device"]), now)
+        elif action == "set_limits":
+            admin.set_limits(db, body.get("account"), dict(body.get("changes") or {}))
+        elif action == "cancel_job":
+            admin.cancel_job(db, str(body["job"]), now)
+        elif action == "rotate_secret":
+            admin.rotate_webhook_secret(db, str(body["account"]))
+        else:
+            raise SpeakcheckError(f"unknown action {action!r}")
+        self.publish("sharing_changed")
+        return {**self.sharing_info(), **out}
+
+    def service_action(self, install: bool) -> dict[str, Any]:
+        """The server as a background service, without the app (`speakcheck server install-service`)."""
+        from ..server import os_service
+
+        if not install:
+            removed = os_service.remove()
+            return {"service": "removed" if removed else "none"}
+        config = self.engine.config
+        cmd = os_service.command(sys.executable, config.source if config.source and config.source.exists() else None,
+                                 config.server.host, config.server.port)  # fmt: skip
+        try:
+            where = os_service.install(cmd, config.source.parent if config.source else Path.cwd())
+        except (OSError, subprocess.CalledProcessError) as e:
+            raise SpeakcheckError(f"couldn't install the service: {e}") from e
+        return {"service": str(where)}
 
     def config_info(self) -> dict[str, Any]:
         from ..engine import editable
@@ -920,6 +1037,12 @@ class Daemon:
 
     def close(self) -> None:
         self._stop.set()
+        if self._sharing is not None:
+            self._sharing.stop()
+            self._sharing = None
+        if self._admin_db is not None:
+            self._admin_db.close()
+            self._admin_db = None
         if self.engine.is_recording():
             try:
                 self.engine.cancel_recording()

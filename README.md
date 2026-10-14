@@ -327,7 +327,12 @@ limits are under `[server]` in `config.example.toml`.
 
 ### Running a server
 
-**From a full install**: any full install can serve other devices. Run `speakcheck server serve`, or
+**From the app**: Settings → Sharing. Turn on **Share** (and choose "My network" so other devices can
+reach it), add an account, and give its invite to the device. The server runs inside the app and
+uses the models it already has loaded. Accounts, devices, limits, recent jobs and webhook secrets
+are all managed in the same tab.
+
+**From a full install, without the app**: run `speakcheck server serve`, or
 `speakcheck server install-service` for a background service that starts with the computer (a systemd
 user unit on Linux, a LaunchAgent on macOS, or a scheduled task on Windows); undo it with
 `speakcheck server remove-service`.

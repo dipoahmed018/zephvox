@@ -6,6 +6,7 @@ import { AnalyzerToggles } from "@/components/AnalyzerToggles";
 import { ConfigProvider, useConfig } from "@/components/config/ConfigContext";
 import { Field } from "@/components/config/Field";
 import { ShortcutEditor } from "@/components/config/ShortcutEditor";
+import { Sharing } from "@/components/config/Sharing";
 import { MissingModels, Options, Stage } from "@/components/config/Stage";
 import { EngineSection } from "@/components/EngineSection";
 import { MicSelect } from "@/components/MicSelect";
@@ -32,7 +33,7 @@ const KINDS: Record<string, string> = {
   triggers: "Shortcuts",
 };
 
-type Tab = "general" | "models" | "devices" | "about";
+type Tab = "general" | "models" | "devices" | "sharing" | "about";
 
 const segment = "h-8 rounded-full px-3.5 data-[state=on]:bg-card data-[state=on]:shadow-soft";
 
@@ -262,6 +263,7 @@ export function Settings() {
     ["general", "General"],
     ...(remote ? [] : ([["models", "Models & checks"]] as [Tab, string][])),
     ["devices", "Devices"],
+    ...(remote ? [] : ([["sharing", "Sharing"]] as [Tab, string][])),
     ["about", "Diagnostics"],
   ];
   const asked = route.params.get("tab") as Tab | null;
@@ -298,6 +300,7 @@ export function Settings() {
             {tab === "general" && <General remote={remote} server={server} />}
             {tab === "models" && <ModelsAndChecks />}
             {tab === "devices" && <Devices remote={remote} />}
+            {tab === "sharing" && <Sharing />}
             {tab === "about" && <About remote={remote} />}
           </div>
         )}

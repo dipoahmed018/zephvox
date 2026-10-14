@@ -290,3 +290,39 @@ export interface ConfigChange {
   value?: unknown;
   reset?: boolean;
 }
+
+// --- sharing this computer (GET /api/sharing) ---------------------------------------------
+
+export interface Limits {
+  max_audio_minutes: number;
+  max_jobs: number;
+  storage_mb: number;
+  requests_per_minute: number;
+}
+
+export interface SharedAccount {
+  id: string;
+  name: string;
+  created: number;
+  limits: Limits;
+  overrides: Partial<Limits>;
+  usage: { active_jobs: number; storage_mb: number };
+  webhook_secret: string;
+  devices: { id: string; name: string; created: number; last_seen: number | null; revoked: number | null }[];
+}
+
+export interface SharingInfo {
+  running: boolean;
+  enabled: boolean;
+  host: string | null;
+  port: number | null;
+  host_setting: string;
+  port_setting: number;
+  urls: string[];
+  error: string | null;
+  remote: boolean;
+  accounts: SharedAccount[];
+  defaults: { limits: Limits; overrides: Partial<Limits>; config: Limits };
+  jobs: { id: string; account: string; status: string; created: number; duration: number | null; error: string | null }[];
+  invite?: { account: string; code: string; expires: number };
+}
