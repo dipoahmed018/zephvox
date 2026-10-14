@@ -1,7 +1,9 @@
 """Daemon, HTTP API, daemon client and daemon-aware CLI."""
 
 import asyncio
+import contextlib
 import json
+import time
 from types import SimpleNamespace
 
 import httpx
@@ -690,3 +692,98 @@ def test_notifier_commands(tmp_path, monkeypatch):
     assert len(ran) == 1
     monkeypatch.setattr(notify.shutil, "which", lambda name: None)
     assert notify.Notifier(platform="linux").command("t", "b") is None
+
+
+class TestConfigApi:
+    """Every option in the Settings page: described, changed, reset and validated."""
+
+    def test_describes_every_option_with_where_it_comes_from(self, api, daemon):
+        info = api.get("/api/config").json()
+        stt = info["providers"]["stt"]
+        assert stt["order"] == ["broken-stt", "fake-stt"]
+        broken = next(d for d in stt["drivers"] if d["name"] == "broken-stt")
+        assert broken["available"] is False and broken["reason"]
+        assert {f["key"] for f in info["engine"]["fields"]} >= {"analyzers", "notifications", "practice_max_s"}
+        assert "data_dir" not in {f["key"] for f in info["engine"]["fields"]}  # not from the page
+        assert info["shortcuts"]["values"]["cancel"] == "Ctrl+Shift+Alt+X"
+        assert info["overlay"] == {} and "server" in info and "limits" in info["server"]
+
+    def test_change_reset_and_validation(self, api, daemon):
+        put = lambda *changes: api.put("/api/config", json={"changes": list(changes)})  # noqa: E731
+        out = put({"path": ["engine", "practice_max_s"], "value": 6.5}, {"path": ["providers", "stt"], "value": ["fake-stt"]})
+        assert out.status_code == 200
+        assert daemon.engine.config.engine.practice_max_s == 6.5 and daemon.engine.config.providers["stt"] == ["fake-stt"]
+        assert out.json()["overlay"] == {"engine": {"practice_max_s": 6.5}, "providers": {"stt": ["fake-stt"]}}
+        # A wrong type is refused and nothing is saved.
+        bad = put({"path": ["engine", "practice_max_s"], "value": "soon"})
+        assert bad.status_code == 409 and daemon.engine.config.engine.practice_max_s == 6.5
+        assert put({"path": ["provider", "fake-capture", "nope"], "value": 1}).status_code == 409
+        assert put({"path": ["engine", "data_dir"], "value": "/tmp/x"}).status_code == 409
+        assert put({"path": ["engine", "analyzers"], "value": []}).json()["detail"] == "At least one check must stay on."
+        assert put({"path": ["shortcuts", "bogus"], "value": "Ctrl+B"}).status_code == 409
+        # Reset: back to what the config gives without the page.
+        out = put({"path": ["engine", "practice_max_s"], "reset": True}, {"path": ["providers", "stt"], "reset": True})
+        assert out.json()["overlay"] == {} and daemon.engine.config.engine.practice_max_s == 10.0
+
+    def test_changing_a_driver_option_restarts_that_driver(self, api, daemon):
+        daemon.engine.provider("capture")
+        api.put("/api/config", json={"changes": [{"path": ["provider", "fake-capture", "device"], "value": "mic-2"}]})
+        assert "capture" not in daemon.engine._providers
+        assert daemon.settings()["capture"] == {"provider": "fake-capture", "device": "mic-2"}
+
+    def test_keys_change_in_place_when_the_driver_can(self, api, daemon, monkeypatch):
+        daemon._start_triggers()
+        first = FakeTriggers.instance
+        rebound = []
+        monkeypatch.setattr(first, "rebind", lambda b: rebound.append(b) or True, raising=False)
+        monkeypatch.setattr(first, "current_bindings", lambda actions: {"cancel": "Ctrl+Alt+Z"}, raising=False)
+        api.put("/api/config", json={"changes": [{"path": ["shortcuts", "cancel"], "value": "Ctrl+Alt+Z"}]})
+        assert rebound == [{"cancel": "Ctrl+Alt+Z"}] and FakeTriggers.instance is first  # not restarted
+        assert api.get("/api/status").json()["triggers"]["bindings"]["cancel"] == "Ctrl+Alt+Z"
+        assert api.get("/api/config").json()["shortcuts"]["values"]["cancel"] == "Ctrl+Alt+Z"
+
+    def test_new_shortcuts_are_registered_again(self, api, daemon):
+        daemon._start_triggers()
+        first = FakeTriggers.instance
+        api.put("/api/config", json={"changes": [{"path": ["shortcuts", "cancel"], "value": "Ctrl+Alt+Q"}]})
+        for _ in range(100):
+            if FakeTriggers.instance is not first:
+                break
+            time.sleep(0.01)
+        assert FakeTriggers.instance.bindings["cancel"] == "Ctrl+Alt+Q"
+
+    def test_old_settings_keys_fold_into_the_overlay(self, daemon):
+        from speakcheck.engine.config import load_user_settings, save_user_settings
+
+        data_dir = daemon.engine.config.engine.data_dir
+        save_user_settings(data_dir, {"capture": {"provider": "fake-capture", "device": "mic-9"}, "practice_target": {"text": "x"}})
+        daemon.update_config([{"path": ["engine", "notifications"], "value": True}])
+        stored = load_user_settings(data_dir)
+        assert "capture" not in stored and stored["practice_target"] == {"text": "x"}
+        assert stored["config"]["provider"]["fake-capture"] == {"device": "mic-9"}
+        assert daemon.notify.enabled is True
+
+    def test_docs_come_from_the_example_config(self):
+        from speakcheck.engine.config import project_root
+        from speakcheck.engine.editable import docs_from_example
+
+        docs = docs_from_example(project_root() / "config.example.toml")
+        assert "GPU" in docs["provider.hf-whisper.device"] and "stricter" in docs["analyzer.pronunciation.threshold"]
+
+    def test_model_download_reports_progress(self, api, daemon, monkeypatch, tmp_path):
+        from speakcheck.install import ollama
+
+        fake = tmp_path / "ollama"
+        fake.write_text("#!/bin/sh\nprintf 'pulling 10%%\\rpulling 60%%\\rpulling 100%%\\nsuccess\\n'\n")
+        fake.chmod(0o755)
+        monkeypatch.setattr(ollama, "find", lambda: str(fake))
+        monkeypatch.setattr(ollama, "serving", lambda binary: contextlib.nullcontext())
+        assert api.post("/api/models/pull", json={"name": "qwen3:14b"}).json()["running"] is True
+        for _ in range(200):
+            if not daemon.downloads["qwen3:14b"]["running"]:
+                break
+            time.sleep(0.01)
+        assert daemon.downloads["qwen3:14b"]["ok"] is True and daemon.downloads["qwen3:14b"]["percent"] == 100
+        assert api.post("/api/models/pull", json={"name": "bad name; rm"}).status_code == 409
+        monkeypatch.setattr(ollama, "find", lambda: None)
+        assert "isn't installed" in api.post("/api/models/pull", json={"name": "qwen3:4b"}).json()["detail"]

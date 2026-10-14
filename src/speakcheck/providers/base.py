@@ -173,3 +173,11 @@ class TriggerProvider(Provider):
     def describe(self) -> str:
         """One sentence telling the user where/how they can rebind the shortcuts."""
         return ""
+
+    def current_bindings(self, actions: list[str]) -> dict[str, str] | None:
+        """The keys really in use, when the desktop may have changed them; None = the ones registered."""
+        return None
+
+    def rebind(self, bindings: dict[str, str]) -> bool:
+        """Change keys while running. False: restart the driver instead (or the desktop owns the keys)."""
+        return False

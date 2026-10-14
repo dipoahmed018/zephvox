@@ -167,6 +167,7 @@ export interface Profiles {
   config_path: string;
   profiles: ProfileInfo[];
   needs?: string[]; // after a switch: what still has to happen
+  models?: string[]; // grammar models still to download
 }
 
 export interface History {
@@ -199,6 +200,7 @@ export interface ProfilePreview {
   accelerator: string;
   needs: string[];
   download_gb: number;
+  models?: string[]; // grammar models it uses that aren't downloaded
 }
 
 export interface EngineMode {
@@ -227,4 +229,64 @@ export interface RemoteInfo {
   reachable: boolean | null;
   error: string | null;
   server: ServerInfo | null;
+}
+
+// --- every option (GET /api/config) -------------------------------------------------------
+
+export type FieldType = "bool" | "int" | "float" | "str" | "list" | "dict" | "choice";
+
+export interface FieldSpec {
+  key: string;
+  type: FieldType;
+  default: unknown;
+  nullable?: boolean;
+  choices?: string[];
+}
+
+export interface OptionGroup {
+  fields: FieldSpec[];
+  values: Record<string, unknown>;
+  base: Record<string, unknown>;
+}
+
+export interface DriverInfo extends OptionGroup {
+  name: string;
+  available: boolean;
+  reason: string;
+}
+
+export interface StageInfo {
+  order: string[];
+  base_order: string[];
+  drivers: DriverInfo[];
+}
+
+export interface ModelDownload {
+  name: string;
+  running: boolean;
+  ok: boolean | null;
+  percent: number | null;
+  line: string;
+}
+
+export interface ConfigInfo {
+  profile: string | null;
+  source: string | null;
+  engine: OptionGroup & { data_dir: string };
+  providers: Record<string, StageInfo>;
+  analyzers: Record<string, OptionGroup>;
+  shortcuts: { values: Record<string, string>; base: Record<string, string> };
+  server: OptionGroup & { limits: OptionGroup };
+  overlay: Record<string, any>;
+  in_file: string[];
+  docs: Record<string, string>;
+  suggestions: Record<string, { value: string; label: string }[]>;
+  missing_models: string[];
+  downloads: Record<string, ModelDownload>;
+}
+
+export interface ConfigChange {
+  path: string[];
+  value?: unknown;
+  reset?: boolean;
 }

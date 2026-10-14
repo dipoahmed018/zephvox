@@ -6,6 +6,8 @@ import { useAction } from "@/engine";
 import { cn } from "@/lib/utils";
 import type { ProfileInfo, ProfilePreview, Profiles } from "@/types";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { useConfig } from "./config/ConfigContext";
+import { MissingModels } from "./config/Stage";
 import { SavedMark, useSaved } from "./Saved";
 import { SettingsSection } from "./SettingsSection";
 
@@ -17,6 +19,7 @@ export function ProfileSection() {
   const [pending, setPending] = useState<ProfileInfo | null>(null);
   const [preview, setPreview] = useState<ProfilePreview | null>(null);
   const [busy, setBusy] = useState(false);
+  const { info: config } = useConfig();
 
   useEffect(() => {
     run(api.profiles).then((p) => p && setInfo(p));
@@ -89,6 +92,7 @@ export function ProfileSection() {
           {info.current === null && (
             <p className="mt-3 mb-0 text-sm text-muted-foreground">No profile chosen yet: the built-in defaults (same as Standard) are in use.</p>
           )}
+          <MissingModels names={config.missing_models} />
           {info.needs && info.needs.length > 0 && (
             <div className="mt-4 rounded-xl bg-primary/8 px-4 py-3 text-sm">
               <p className="m-0 font-semibold">Still to do</p>

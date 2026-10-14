@@ -50,7 +50,7 @@ export function SettingRow({
 }) {
   return (
     <div className={cn("flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-4", stack && "flex-col items-stretch")}>
-      <div className="min-w-0 flex-1 basis-56">
+      <div className={cn("min-w-0", !stack && "flex-1 basis-56")}>
         <div className="flex items-center gap-2">
           {htmlFor ? (
             <Label htmlFor={htmlFor} className="text-base font-semibold">

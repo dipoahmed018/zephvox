@@ -12,6 +12,8 @@ import dataclasses
 import functools
 import json
 import os
+import re
+import subprocess
 import sys
 import threading
 import time
@@ -23,6 +25,8 @@ from typing import Any
 from ..engine import hardware, profiles
 from ..engine.config import (
     ACTIONS,
+    PROVIDER_KINDS,
+    Config,
     apply_user_settings,
     choose_profile,
     default_config_path,
@@ -109,6 +113,9 @@ class Daemon:
         # {"text": ..., "session_id": ...}; remembered across restarts in settings.json
         self.practice_target: dict[str, Any] | None = load_user_settings(engine.config.engine.data_dir).get("practice_target")
         self.notify = Notifier(engine.config.engine.notifications)
+        # Without a config file (tests, embedding) the config as given is the base for page changes.
+        self._initial_config = engine.config
+        self.downloads: dict[str, dict[str, Any]] = {}  # grammar models being pulled, by name
         self._shortcut_pending: set[str] = set()  # "analysis" / "practice": announce the result
         self.analyzing: str | None = None  # session being analyzed right now
         self._backend: Any = None  # LocalBackend | RemoteBackend, built on first use
@@ -370,26 +377,196 @@ class Daemon:
     # --- settings -------------------------------------------------------------------------
 
     def settings(self) -> dict[str, Any]:
-        stored = load_user_settings(self.engine.config.engine.data_dir)
+        from ..engine.editable import overlay_of
+
+        overlay = overlay_of(load_user_settings(self.engine.config.engine.data_dir)).get("provider", {})
+
+        def chosen(kind: str, field: str) -> dict[str, Any]:
+            """The driver of `kind` whose `field` was picked in the page, e.g. {provider, device}."""
+            for name in self.engine.registry.names(kind):
+                if field in overlay.get(name, {}):
+                    return {"provider": name, field: overlay[name][field]}
+            return {}
+
         return {
-            "capture": stored.get("capture") or {},
-            "tts": stored.get("tts") or {},
+            "capture": chosen("capture", "device"),
+            "tts": chosen("tts", "voice"),
             "analyzers": self.engine.config.engine.analyzers,
             "shortcuts": self.engine.config.shortcuts,
         }
 
     def update_settings(self, changes: dict[str, Any]) -> dict[str, Any]:
-        data_dir = self.engine.config.engine.data_dir
-        stored = load_user_settings(data_dir)
-        stored.update({k: v for k, v in changes.items() if k in ("capture", "tts", "analyzers")})
-        save_user_settings(data_dir, stored)
-        self.engine.config = apply_user_settings(self.engine.config, stored)
-        if "capture" in changes and not self.engine.is_recording():
-            self.engine.release("capture")  # next recording uses the new device
-        if "tts" in changes:
-            self.engine.release("tts")
-        self.publish("settings_changed", settings=self.settings())
+        """The microphone, voice and checks (the page's first controls); each is an option change."""
+        edits: list[dict[str, Any]] = []
+        for key, field in (("capture", "device"), ("tts", "voice")):
+            chosen = changes.get(key)
+            if isinstance(chosen, dict) and chosen.get("provider"):
+                path = ["provider", chosen["provider"], field]
+                edits.append({"path": path, "reset": True} if chosen.get(field) is None
+                             else {"path": path, "value": chosen[field]})  # fmt: skip
+        if changes.get("analyzers"):
+            edits.append({"path": ["engine", "analyzers"], "value": list(changes["analyzers"])})
+        if edits:
+            self.update_config(edits)
         return self.settings()
+
+    # --- every option (the Settings page) ---------------------------------------------------
+
+    def _base_config(self) -> Config:
+        """The config without the page's changes: defaults, profile, config.toml and `--set`."""
+        current = self.engine.config
+        source = current.source
+        if source is None:
+            return self._initial_config
+        base = load_config(source, page=False) if Path(source).exists() else Config(source=source)
+        return base.with_overrides(current.overrides) if current.overrides else base
+
+    def _reconfigure(self) -> None:
+        """Rebuild the config (base + the page's changes) and let changed drivers start fresh."""
+        old = self.engine.config
+        base = self._base_config()
+        new = apply_user_settings(base, load_user_settings(base.engine.data_dir))
+        self.engine.config = new
+        for kind in PROVIDER_KINDS:
+            names = self.engine.registry.names(kind)
+            changed = old.providers.get(kind) != new.providers.get(kind) or any(
+                old.provider_settings(n) != new.provider_settings(n) for n in names)  # fmt: skip
+            if not changed:
+                continue
+            if kind == "triggers" or (kind == "capture" and self.engine.is_recording()):
+                continue  # shortcuts restart below; a recording keeps its microphone
+            self.engine.release(kind)
+        self.notify.enabled = new.engine.notifications
+        changed = {a: k for a, k in new.shortcuts.items() if old.shortcuts.get(a) != k}
+        if old.providers.get("triggers") != new.providers.get("triggers"):
+            self._restart_triggers()
+        elif changed:
+            provider = self._trigger_provider
+            if provider is not None and provider.rebind(changed):  # e.g. KDE: set in place
+                self.publish("triggers", **self.triggers, bindings=self.bindings())
+            else:
+                self._restart_triggers()
+
+    def bindings(self) -> dict[str, str]:
+        """The shortcut keys really in use: the desktop's, when it may have changed them, else the config's."""
+        configured = dict(self.engine.config.shortcuts)
+        provider = self._trigger_provider
+        actual = provider.current_bindings(list(configured)) if provider is not None else None
+        return {**configured, **(actual or {})}
+
+    def _restart_triggers(self) -> None:
+        old, self._trigger_provider = self._trigger_provider, None
+        if old is not None:
+            try:
+                old.stop()
+            except Exception:  # replaced anyway
+                pass
+        self.engine.release("triggers")
+        threading.Thread(target=self._start_triggers, name="triggers", daemon=True).start()
+
+    def _validate_drivers(self, config: Config, touched: set[tuple[str, str]]) -> None:
+        """Driver and check options are free-form in the config; check the changed ones against their fields."""
+        from pydantic import ValidationError
+
+        registry = self.engine.registry
+        for name, values in config.provider.items():
+            if ("provider", name) not in touched:
+                continue
+            kind = next((k for k in PROVIDER_KINDS if name in registry.names(k)), None)
+            if kind is None:
+                continue
+            try:
+                registry.get(kind, name).Settings(**values)
+            except ValidationError as e:
+                raise SpeakcheckError(f"{name}: {e.errors()[0]['loc'][0]} {e.errors()[0]['msg'].lower()}") from e
+        for name, values in config.analyzer.items():
+            if ("analyzer", name) not in touched or name not in registry.names("analyzers"):
+                continue
+            try:
+                registry.get("analyzers", name).Settings(**values)
+            except ValidationError as e:
+                raise SpeakcheckError(f"{name}: {e.errors()[0]['loc'][0]} {e.errors()[0]['msg'].lower()}") from e
+
+    def update_config(self, changes: list[dict[str, Any]]) -> dict[str, Any]:
+        """Change options (`[{path, value}]` or `[{path, reset: true}]`); checked before anything is saved."""
+        from ..engine import editable
+
+        data_dir = self.engine.config.engine.data_dir
+        stored = editable.apply_changes(load_user_settings(data_dir), changes)
+        candidate = apply_user_settings(self._base_config(), stored)  # raises on a bad value
+        self._validate_drivers(candidate, {tuple(c["path"][:2]) for c in changes if len(c.get("path") or ()) >= 2})
+        if not candidate.engine.analyzers:
+            raise SpeakcheckError("At least one check must stay on.")
+        save_user_settings(data_dir, stored)
+        self._reconfigure()
+        self.publish("settings_changed", settings=self.settings())
+        self.publish("config_changed")
+        return self.config_info()
+
+    MODEL_NAME = re.compile(r"^[\w][\w.:/-]{0,127}$")
+    ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+
+    def pull_model(self, name: str) -> dict[str, Any]:
+        """Download an Ollama model in the background (`ollama pull`), with progress as events."""
+        from ..install import ollama
+
+        if not self.MODEL_NAME.match(name):
+            raise SpeakcheckError(f"{name!r} isn't a model name")
+        current = self.downloads.get(name)
+        if current and current["running"]:
+            return current
+        binary = ollama.find()
+        if binary is None:
+            raise SpeakcheckError("Ollama isn't installed. Install it from https://ollama.com, then try again.")
+        state: dict[str, Any] = {"name": name, "running": True, "ok": None, "percent": None, "line": "Starting…"}
+        self.downloads[name] = state
+        self.publish("model_download", **state)
+
+        def run() -> None:
+            ok = False
+            try:
+                with ollama.serving(binary):
+                    proc = subprocess.Popen([binary, "pull", name], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                    assert proc.stdout is not None
+                    buffer, last = b"", 0.0
+                    while chunk := proc.stdout.read1(4096):
+                        buffer += chunk
+                        *lines, buffer = re.split(rb"[\r\n]", buffer)
+                        for raw in lines:
+                            line = self.ANSI.sub("", raw.decode(errors="replace")).strip()
+                            if not line:
+                                continue
+                            state["line"] = line
+                            if m := re.search(r"(\d{1,3})%", line):
+                                state["percent"] = int(m.group(1))
+                        if time.monotonic() - last > 0.5:
+                            last = time.monotonic()
+                            self.publish("model_download", **state)
+                    ok = proc.wait() == 0
+            except (RuntimeError, OSError) as e:
+                state["line"] = str(e)
+            state.update(running=False, ok=ok, percent=100 if ok else state["percent"])
+            if ok:
+                state["line"] = "Downloaded"
+                self.engine.release("llm")
+            self.publish("model_download", **state)
+
+        threading.Thread(target=run, name=f"pull-{name}", daemon=True).start()
+        return state
+
+    def config_info(self) -> dict[str, Any]:
+        from ..engine import editable
+
+        config = self.engine.config
+        availability = {(s.kind, s.name): (s.available, s.reason) for s in self.engine.list_providers()}
+        root = project_root()
+        info = editable.describe(
+            config, self._base_config(), editable.overlay_of(load_user_settings(config.engine.data_dir)),
+            editable.read_file(config.source), self.engine.registry, availability,
+            root / "config.example.toml" if root else None,
+        )  # fmt: skip
+        info["shortcuts"]["values"] = self.bindings()  # what really works, even if changed in the desktop's settings
+        return {"missing_models": self.missing_models(), "downloads": self.downloads, **info}
 
     # --- client mode: the server, this device's key, installing the engine here ------------------
 
@@ -561,7 +738,7 @@ class Daemon:
             if ok and then_local and self.engine_installed():
                 path = self._config_path()
                 if path.exists():  # setup wrote the chosen profile there
-                    self.engine.config = load_config(path)
+                    self._reconfigure()
                 self._save_remote({"mode": "local"})
             self.install.update(running=False, ok=ok)
             self.publish("install", **{**self.install, "log": self.install["log"][-20:]})
@@ -634,6 +811,16 @@ class Daemon:
                 size += d.approx_gb or 0
         return needs, round(size, 1)
 
+    def missing_models(self, config: Config | None = None) -> list[str]:
+        """Grammar models the config uses that aren't downloaded (when grammar is on and runs on Ollama)."""
+        from ..install import ollama
+        from ..install.download import plan_downloads
+
+        config = config or self.engine.config
+        if "grammar" not in config.engine.analyzers:
+            return []
+        return [d.name for d in plan_downloads(config) if d.source == "ollama" and not ollama.has_model(d.name)]
+
     def preview_profile(self, name: str) -> dict[str, Any]:
         """What switching to a profile would change, without switching (for the page's confirmation)."""
         from ..install.wizard import preview_config
@@ -646,7 +833,8 @@ class Daemon:
         return {"name": name, "llm_model": profile.llm_model if name != profiles.CUSTOM else
                 (config.provider_settings("openai-compat").get("model", "qwen3:8b")
                  if "grammar" in config.engine.analyzers else None),
-                "accelerator": profiles.accelerator(profile, self.hardware), "needs": needs, "download_gb": size}  # fmt: skip
+                "accelerator": profiles.accelerator(profile, self.hardware), "needs": needs, "download_gb": size,
+                "models": self.missing_models(config)}  # fmt: skip
 
     def set_profile(self, name: str) -> dict[str, Any]:
         """Switch profile now. Models load on next use; what can't happen here is listed in `needs`."""
@@ -656,13 +844,13 @@ class Daemon:
         root = project_root()
         path = self._config_path()
         choose_profile(path, name, template=root / "config.example.toml" if root else None)
-        self.engine.config = load_config(path)
+        self._reconfigure()
         for kind in self.MODEL_KINDS:
             self.engine.release(kind)
         info = self.profiles()
         needs, _ = self._profile_needs(profile, self.engine.config)
         self.publish("settings_changed", settings=self.settings())
-        return {**info, "needs": needs}
+        return {**info, "needs": needs, "models": self.missing_models()}
 
     def hardware_info(self) -> dict[str, Any]:
         """This computer, detected the same way as setup (so names and sizes match)."""
@@ -715,7 +903,7 @@ class Daemon:
             self.triggers.update(active=True, error=None)
         except (ProviderUnavailable, SpeakcheckError) as e:
             self.triggers.update(active=False, error=str(e))
-        self.publish("triggers", **self.triggers, bindings=bindings)
+        self.publish("triggers", **self.triggers, bindings=self.bindings())
 
     # --- lifecycle --------------------------------------------------------------------------
 
@@ -724,7 +912,7 @@ class Daemon:
             "busy": self.busy,
             "recording": self.engine.recording_status(),
             "practice_target": self.practice_target,
-            "triggers": {**self.triggers, "bindings": self.engine.config.shortcuts},
+            "triggers": {**self.triggers, "bindings": self.bindings()},
             "engine": {"mode": self.engine.config.remote.mode, "url": self.engine.config.remote.url},
             "hardware": self.hardware_info(),
             "pid": os.getpid(),

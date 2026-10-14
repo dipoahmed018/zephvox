@@ -76,7 +76,8 @@
 # threshold = 0.3            # higher = stricter about what counts as a mistake
 # flag_major_errors = true   # always flag a full substitution or missing sound (e.g. θ→s)
 # accept_non_rhotic = true   # accept British-style r-dropping ("car" as /kɑ/)
-# min_phones = 2
+# min_phones = 2            # shorter words aren't checked
+# skip_words = ["a", "the", "of"]   # words not checked (default: about 100 short words that are reduced in speech)
 
 [analyzer.practice]
 # pass_score = 85
@@ -88,21 +89,28 @@
 # base_url = "http://localhost:11434/v1"   # Ollama; also llama.cpp, vLLM, LM Studio, cloud APIs
 # model = "qwen3:8b"                       # qwen3:14b fits in 16 GB of VRAM
 # api_key_env = "OPENAI_API_KEY"           # for cloud endpoints: the NAME of the variable in .env
+# temperature = 0.0                        # 0 = the same answer every time; higher = more varied
 # autostart = true                         # run `ollama serve` only during analysis
-# serve_command = ["ollama", "serve"]
-# max_tokens = 2048
-# timeout = 300.0
+# serve_command = ["ollama", "serve"]      # how to start the local server when it isn't running
+# start_timeout = 60.0                     # seconds to wait for it to answer
+# max_tokens = 2048                        # longest reply (some models never stop otherwise)
+# timeout = 300.0                          # seconds to wait for one reply
+# max_retries = 2                          # tries again after a network error
+# no_think = true                          # skip Qwen3's reasoning step: faster, and not needed here
+# check_model = true                       # make sure the model exists first (off for servers that name models differently)
 
 [analyzer.grammar]
 # min_confidence = 0.85   # lower = more (and less certain) grammar findings
-# batch_size = 5
+# batch_size = 5          # sentences sent to the model at once
+# retries = 1             # asks again when a reply isn't valid
 
 # --- practice voices and audio ----------------------------------------------------------
 
 [provider.kokoro]
 # voice = "af_heart"
-# speed = 0.9
-# device = "cpu"
+# speed = 0.9                # a little slower than normal helps you hear each sound
+# device = "cpu"             # fast enough on the CPU, and leaves the GPU to the other models
+# repo_id = "hexgrad/Kokoro-82M"   # Hugging Face repo of the voice model
 
 [provider.espeak-ng]
 # voice = "en-us"

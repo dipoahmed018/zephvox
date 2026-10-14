@@ -1,5 +1,8 @@
 import type {
   AnalysisResult,
+  ConfigChange,
+  ConfigInfo,
+  ModelDownload,
   Device,
   Feedback,
   History,
@@ -82,6 +85,10 @@ export const api = {
   rotateKey: () => request<RemoteInfo>("POST", "/api/remote/rotate"),
   forgetKey: () => request<RemoteInfo>("DELETE", "/api/remote/key"),
   installEngine: () => request<unknown>("POST", "/api/install"),
+
+  config: () => request<ConfigInfo>("GET", "/api/config"),
+  saveConfig: (changes: ConfigChange[]) => request<ConfigInfo>("PUT", "/api/config", { changes }),
+  pullModel: (name: string) => request<ModelDownload>("POST", "/api/models/pull", { name }),
 };
 
 export const urls = {

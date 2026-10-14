@@ -40,6 +40,20 @@ class TargetBody(BaseModel):
     session_id: str | None = None
 
 
+class ConfigChange(BaseModel):
+    path: list[str]
+    value: Any = None
+    reset: bool = False
+
+
+class ConfigBody(BaseModel):
+    changes: list[ConfigChange]
+
+
+class ModelBody(BaseModel):
+    name: str
+
+
 class ProfileBody(BaseModel):
     name: str
 
@@ -158,6 +172,20 @@ def create_app(daemon: Daemon) -> FastAPI:
     @app.put("/api/profile")
     def put_profile(body: ProfileBody):
         return guard(daemon.set_profile, body.name)
+
+    # --- every option (the Settings page) ----------------------------------------------------
+
+    @app.get("/api/config")
+    def get_config():
+        return jsonable(guard(daemon.config_info))
+
+    @app.put("/api/config")
+    def put_config(body: ConfigBody):
+        return jsonable(guard(daemon.update_config, [c.model_dump() for c in body.changes]))
+
+    @app.post("/api/models/pull")
+    def pull_model(body: ModelBody):
+        return guard(daemon.pull_model, body.name)
 
     @app.get("/api/voices")
     def voices():

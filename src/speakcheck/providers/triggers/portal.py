@@ -33,6 +33,45 @@ _MODIFIERS = {"ctrl": "CTRL", "control": "CTRL", "alt": "ALT", "shift": "SHIFT",
               "meta": "LOGO", "win": "LOGO", "cmd": "LOGO"}  # fmt: skip
 
 
+# KDE stores shortcuts as Qt key codes: modifier bits plus the key.
+_QT_MODS = {"SHIFT": 0x02000000, "CTRL": 0x04000000, "ALT": 0x08000000, "LOGO": 0x10000000}
+_QT_KEYS = {"space": 0x20, "escape": 0x01000000, "tab": 0x01000001, "backspace": 0x01000003, "return": 0x01000004,
+            "enter": 0x01000005, "insert": 0x01000006, "delete": 0x01000007, "home": 0x01000010, "end": 0x01000011,
+            "left": 0x01000012, "up": 0x01000013, "right": 0x01000014, "down": 0x01000015,
+            "pageup": 0x01000016, "pagedown": 0x01000017}  # fmt: skip
+_QT_NAMES = {"SHIFT": "Shift", "CTRL": "Ctrl", "ALT": "Alt", "LOGO": "Super"}
+
+
+def to_qt_key(combo: str) -> int:
+    """"Ctrl+Shift+Alt+R" → the Qt key code KDE stores."""
+    *mods, key = to_portal_trigger(combo).split("+")
+    code = sum(_QT_MODS[m] for m in mods)
+    k = key.lower()
+    if len(key) == 1:
+        return code + ord(key.upper())
+    if k in _QT_KEYS:
+        return code + _QT_KEYS[k]
+    if k.startswith("f") and k[1:].isdigit() and 1 <= int(k[1:]) <= 35:
+        return code + 0x01000030 + int(k[1:]) - 1
+    raise ValueError(f"Can't set {combo!r} on this desktop")
+
+
+def from_qt_key(code: int) -> str | None:
+    """A Qt key code back to "Ctrl+Shift+Alt+R" (None for keys we don't name)."""
+    mods = [name for flag, name in ((_QT_MODS["CTRL"], "Ctrl"), (_QT_MODS["SHIFT"], "Shift"),
+                                    (_QT_MODS["ALT"], "Alt"), (_QT_MODS["LOGO"], "Super")) if code & flag]  # fmt: skip
+    key = code & 0x01FFFFFF
+    if 0x20 < key < 0x7F:
+        name = chr(key).upper()
+    elif 0x01000030 <= key <= 0x01000052:
+        name = f"F{key - 0x01000030 + 1}"
+    else:
+        name = next((n.capitalize() for n, v in _QT_KEYS.items() if v == key), None)
+        if name is None:
+            return None
+    return "+".join([*mods, name])
+
+
 def to_portal_trigger(combo: str) -> str:
     """"Ctrl+Alt+R" → "CTRL+ALT+r" (freedesktop shortcuts spec)."""
     parts = [p.strip() for p in combo.split("+") if p.strip()]
@@ -117,6 +156,34 @@ class PortalSession:
             "BindShortcuts", "oa(sa{sv})sa{sv}",
             lambda t: [self.session_handle, shortcuts, "", {"handle_token": V("s", t)}],
         )  # fmt: skip
+
+    def _action_id(self, app_id: str, action: str) -> list[str]:
+        return [app_id, action, "speakcheck", DESCRIPTIONS.get(action, action)]
+
+    async def kde_bindings(self, app_id: str, actions: list[str]) -> dict[str, str] | None:
+        """The keys KDE really uses for each action (they may have been changed in its settings)."""
+        out: dict[str, str] = {}
+        for action in actions:
+            reply = await self.bus.call(self._Message(
+                destination="org.kde.kglobalaccel", path="/kglobalaccel", interface="org.kde.KGlobalAccel",
+                member="shortcut", signature="as", body=[self._action_id(app_id, action)]))  # fmt: skip
+            if reply.message_type == self._MessageType.ERROR:
+                return None
+            keys = [k for k in reply.body[0] if k]
+            if keys and (combo := from_qt_key(keys[0])):
+                out[action] = combo
+        return out
+
+    async def set_kde_bindings(self, app_id: str, bindings: dict[str, str]) -> bool:
+        """Set the keys in KDE directly (as its System Settings does). False when this isn't KDE."""
+        for action, combo in bindings.items():
+            reply = await self.bus.call(self._Message(
+                destination="org.kde.kglobalaccel", path="/kglobalaccel", interface="org.kde.KGlobalAccel",
+                member="setForeignShortcut", signature="asai",
+                body=[self._action_id(app_id, action), [to_qt_key(combo)]]))  # fmt: skip
+            if reply.message_type == self._MessageType.ERROR:
+                return False
+        return True
 
     async def active_on_kde(self, app_id: str) -> bool | None:
         """Whether KDE currently delivers this app's shortcuts; None when the desktop isn't KDE.
@@ -253,6 +320,27 @@ class PortalTriggers(TriggerProvider):
         ready.wait()
         if "e" in error:
             raise SpeakcheckError(f"Could not register shortcuts with the desktop portal: {error['e']}")
+
+    def _call(self, coro_fn, timeout: float = 5.0):
+        if self._loop is None or self._session is None:
+            return None
+        return asyncio.run_coroutine_threadsafe(coro_fn(self._session), self._loop).result(timeout=timeout)
+
+    def current_bindings(self, actions: list[str]) -> dict[str, str] | None:
+        """The keys the desktop really uses (KDE only), or None when it can't tell."""
+        try:
+            return self._call(lambda s: s.kde_bindings(self.settings.app_id, actions))
+        except Exception:  # noqa: BLE001 - a status nicety
+            return None
+
+    def rebind(self, bindings: dict[str, str]) -> bool:
+        """Change the keys in place. The portal only *suggests* keys when first registering, so on KDE
+        they are set through its shortcut service; elsewhere this returns False (change them in the
+        desktop's settings)."""
+        try:
+            return bool(self._call(lambda s: s.set_kde_bindings(self.settings.app_id, bindings)))
+        except (ValueError, TimeoutError):
+            return False
 
     @staticmethod
     def _log_rebind() -> None:

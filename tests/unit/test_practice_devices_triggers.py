@@ -291,12 +291,20 @@ class FakeBus:
         self.kde_active = list(kde_active) if kde_active is not None else None  # answers to isActive, in order
         self.calls = []
         self.handler = None
+        self.kde_keys = {}
 
     def add_message_handler(self, handler):
         self.handler = handler
 
     async def call(self, msg):
         self.calls.append(msg)
+        if msg.member == "setForeignShortcut":
+            self.kde_keys[msg.body[0][1]] = msg.body[1]
+            return SimpleNamespace(message_type=MessageType.METHOD_RETURN, body=[])
+        if msg.member == "shortcut":
+            if self.kde_active is None:
+                return SimpleNamespace(message_type=MessageType.ERROR, error_name="ServiceUnknown", body=[])
+            return SimpleNamespace(message_type=MessageType.METHOD_RETURN, body=[self.kde_keys.get(msg.body[0][1], [])])
         if msg.member == "isActive":
             if not self.kde_active:  # not KDE (or nothing left to say)
                 return SimpleNamespace(message_type=MessageType.ERROR, error_name="ServiceUnknown", body=[])
@@ -344,6 +352,26 @@ class TestPortal:
         members = [m.member for m in bus.calls]
         assert members.count("CreateSession") == 2 and "Close" in members and rebinds == [1]
         assert next(m for m in bus.calls if m.member == "isActive").path == "/component/io_github_speakcheck"
+
+    def test_qt_key_codes(self):
+        assert portal.to_qt_key("Ctrl+Shift+Alt+X") == 234881112  # what KDE stored on a real desktop
+        for combo in ("Ctrl+Shift+Alt+R", "Super+F5", "Ctrl+Space", "Alt+7"):
+            assert portal.from_qt_key(portal.to_qt_key(combo)) == combo
+        with pytest.raises(ValueError):
+            portal.to_qt_key("Ctrl+Mystery")
+
+    def test_keys_are_set_and_read_through_kde(self):
+        bus = FakeBus(kde_active=[True])
+        session = PortalSession(bus, lambda a: None, response_timeout=2)
+
+        async def run():
+            assert await session.set_kde_bindings("io.github.speakcheck", {"cancel": "Ctrl+Shift+Alt+Q"})
+            return await session.kde_bindings("io.github.speakcheck", ["cancel", "toggle_recording"])
+
+        assert asyncio.run(run()) == {"cancel": "Ctrl+Shift+Alt+Q"}
+        call = next(m for m in bus.calls if m.member == "setForeignShortcut")
+        assert call.body[0] == ["io.github.speakcheck", "cancel", "speakcheck", "speakcheck: cancel recording"]
+        assert asyncio.run(PortalSession(FakeBus(), lambda a: None).kde_bindings("app", ["cancel"])) is None  # not KDE
 
     def test_watch_returns_at_once_off_kde(self):
         bus = FakeBus()

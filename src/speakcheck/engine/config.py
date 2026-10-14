@@ -210,6 +210,8 @@ class Config(BaseModel):
     profile: str | None = None
     # The file this was loaded from (not a setting): where the GUI writes a profile change.
     source: Path | None = Field(default=None, exclude=True)
+    # `--set kind=name` overrides from the command line (not a setting): kept when the config reloads.
+    overrides: list[str] = Field(default_factory=list, exclude=True)
     engine: EngineSettings = Field(default_factory=EngineSettings)
     providers: dict[str, list[str]] = Field(default_factory=_default_providers)
     provider: dict[str, dict[str, Any]] = Field(default_factory=dict)
@@ -233,11 +235,14 @@ class Config(BaseModel):
             if not sep or not names.strip():
                 raise ConfigError(f"Override must look like kind=name, got {item!r}")
             providers[kind] = [n.strip() for n in names.split(",") if n.strip()]
-        return self.model_copy(update={"providers": providers})
+        return self.model_copy(update={"providers": providers, "overrides": [*self.overrides, *overrides]})
 
 
-def load_config(path: Path | None = None) -> Config:
-    """Load config from `path` (or the default location). Missing default file → defaults."""
+def load_config(path: Path | None = None, page: bool = True) -> Config:
+    """Load config from `path` (or the default location). Missing default file → defaults.
+
+    `page=False`: without the changes saved from the page (what the defaults, the profile and
+    config.toml give on their own)."""
     explicit = path is not None
     path = Path(path) if explicit else default_config_path()
     data: dict[str, Any] = {}
@@ -266,7 +271,7 @@ def load_config(path: Path | None = None) -> Config:
     except ValidationError as e:
         raise ConfigError(f"Invalid config in {path}:\n{e}") from e
     config.engine.data_dir = config.engine.data_dir.expanduser()
-    return apply_user_settings(config, load_user_settings(config.engine.data_dir))
+    return apply_user_settings(config, load_user_settings(config.engine.data_dir)) if page else config
 
 
 def merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
@@ -333,21 +338,20 @@ def save_user_settings(data_dir: Path, settings: dict[str, Any]) -> None:
 
 
 def apply_user_settings(config: Config, settings: dict[str, Any]) -> Config:
-    """Supported keys: `capture: {provider, device}`, `tts: {provider, voice}`, `analyzers: [...]`,
-    `remote: {mode, url, headers, sync, device_name}`."""
-    update: dict[str, Any] = {}
-    provider = {k: dict(v) for k, v in config.provider.items()}
-    for key, field in (("capture", "device"), ("tts", "voice")):
-        chosen = settings.get(key) or {}
-        if chosen.get("provider"):
-            settings_for = provider.setdefault(chosen["provider"], {})
-            if chosen.get(field) is None:
-                settings_for.pop(field, None)  # back to the driver's default
-            else:
-                settings_for[field] = chosen[field]
-            update["provider"] = provider
-    if settings.get("analyzers"):
-        update["engine"] = config.engine.model_copy(update={"analyzers": list(settings["analyzers"])})
+    """Layer what was changed in the page over the config: the `config` overlay (any option, see
+    engine/editable.py; older `capture`, `tts` and `analyzers` keys count as part of it) and `remote`."""
+    from .editable import overlay_of
+
+    overlay = overlay_of(settings)
+    if overlay:
+        data = merge(config.model_dump(exclude={"source"}), overlay)
+        unknown = set(data.get("shortcuts") or {}) - set(ACTIONS)
+        if unknown:
+            raise ConfigError(f"Unknown shortcut action(s) saved from the page: {', '.join(sorted(unknown))}")
+        try:
+            config = Config(**data, source=config.source, overrides=config.overrides)
+        except ValidationError as e:
+            raise ConfigError(f"Invalid setting saved from the page:\n{e}") from e
     if isinstance(settings.get("remote"), dict):
-        update["remote"] = RemoteSettings(**{**config.remote.model_dump(), **settings["remote"]})
-    return config.model_copy(update=update) if update else config
+        config = config.model_copy(update={"remote": RemoteSettings(**{**config.remote.model_dump(), **settings["remote"]})})
+    return config

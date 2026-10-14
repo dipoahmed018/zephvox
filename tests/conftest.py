@@ -114,6 +114,9 @@ class FakeCapture(CaptureProvider):
     name = "fake-capture"
     stopped: list[dict] = []
 
+    class Settings(ProviderSettings):
+        device: str | None = None
+
     def start(self, dest: Path):
         audio.write_wav(dest, np.zeros(16000 * 3, dtype=np.float32))
         return {"path": str(dest)}
