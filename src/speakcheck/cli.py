@@ -46,6 +46,8 @@ def _parser() -> argparse.ArgumentParser:
     s.add_argument("--port", type=int, default=8765)
     s.add_argument("--open", action="store_true", help="open the page in your browser")
     s.add_argument("--no-shortcuts", action="store_true", help="don't register global shortcuts")
+    sub.add_parser("desktop-entry", parents=[common],
+                   help="Linux: add speakcheck to the app menu (also names its global shortcuts)")  # fmt: skip
     sub.add_parser("providers", parents=[common], help="list providers and whether they can run here")
     sub.add_parser("doctor", parents=[common], help="system + plugin diagnostics as JSON")
     h = sub.add_parser("history", parents=[common], help="your most frequent mistakes")
@@ -128,7 +130,11 @@ def run(args: argparse.Namespace, engine: Engine, ask: Callable[[str], str]) -> 
                 return 0
             cmd = "stop"
             args.analyzers, args.format, args.output = None, "terminal", None
-    if cmd == "serve":
+    if cmd == "desktop-entry":
+        from .desktop import install
+
+        print(f"Installed {install()}")
+    elif cmd == "serve":
         from .web.server import serve
 
         serve(engine, args.host, args.port, args.open, shortcuts=not args.no_shortcuts)

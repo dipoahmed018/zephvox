@@ -159,7 +159,7 @@ class TestDaemonActions:
     def test_triggers_started_and_dispatched(self, daemon):
         daemon._start_triggers()
         trig = FakeTriggers.instance
-        assert trig.bindings["toggle_recording"] == "Ctrl+Alt+R"
+        assert trig.bindings["toggle_recording"] == "Ctrl+Shift+Alt+R"
         assert daemon.triggers["active"] and daemon.triggers["description"] == "rebind in config"
         trig.fire_cb("toggle_recording")
         assert daemon.engine.is_recording()
@@ -273,7 +273,7 @@ class TestAPI:
         status = api.get("/api/status").json()
         assert status["busy"] is False and status["recording"] is None
         assert "fake-stt" in {p["name"] for p in status["doctor"]["providers"]}
-        assert api.get("/api/settings").json()["shortcuts"]["cancel"] == "Ctrl+Alt+X"
+        assert api.get("/api/settings").json()["shortcuts"]["cancel"] == "Ctrl+Shift+Alt+X"
         devices = api.get("/api/devices").json()
         assert devices["provider"] == "fake-capture" and devices["devices"][0]["is_default"] is True
         out = api.put("/api/settings", json={"analyzers": ["grammar"]}).json()

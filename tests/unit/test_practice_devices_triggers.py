@@ -105,7 +105,7 @@ class TestSettings:
         path.write_text(f'[engine]\ndata_dir = "{tmp_path}"\n[shortcuts]\ncancel = "Ctrl+Shift+X"\n')
         save_user_settings(tmp_path, {"analyzers": ["pronunciation"]})
         c = load_config(path)
-        assert c.shortcuts["cancel"] == "Ctrl+Shift+X" and c.shortcuts["toggle_recording"] == "Ctrl+Alt+R"
+        assert c.shortcuts["cancel"] == "Ctrl+Shift+X" and c.shortcuts["toggle_recording"] == "Ctrl+Shift+Alt+R"
         assert c.engine.analyzers == ["pronunciation"]
         assert "tts" in c.providers and "triggers" in c.providers
 
@@ -263,6 +263,7 @@ class TestEspeakTTS:
 class TestKeyCombos:
     @pytest.mark.parametrize("combo, portal_form, pynput_form", [
         ("Ctrl+Alt+R", "CTRL+ALT+r", "<ctrl>+<alt>+r"),
+        ("Ctrl+Shift+Alt+P", "CTRL+SHIFT+ALT+p", "<ctrl>+<shift>+<alt>+p"),
         ("Super+Shift+F5", "LOGO+SHIFT+F5", "<cmd>+<shift>+<f5>"),
         ("Ctrl + Space", "CTRL+Space", "<ctrl>+<space>"),
     ])  # fmt: skip

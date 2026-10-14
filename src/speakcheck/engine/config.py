@@ -76,7 +76,13 @@ def _default_providers() -> dict[str, list[str]]:
 
 
 def _default_shortcuts() -> dict[str, str]:
-    return {"toggle_recording": "Ctrl+Alt+R", "practice_attempt": "Ctrl+Alt+P", "cancel": "Ctrl+Alt+X"}
+    # Three modifiers: practically never taken by apps or desktops on Linux, Windows or macOS, and
+    # unlike Ctrl+Alt they don't collide with AltGr characters on international keyboard layouts.
+    return {
+        "toggle_recording": "Ctrl+Shift+Alt+R",
+        "practice_attempt": "Ctrl+Shift+Alt+P",
+        "cancel": "Ctrl+Shift+Alt+X",
+    }
 
 
 class Config(BaseModel):

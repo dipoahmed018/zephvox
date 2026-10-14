@@ -161,7 +161,7 @@ class PortalTriggers(TriggerProvider):
     name = "portal"
 
     class Settings(ProviderSettings):
-        app_id: str = "io.github.speakcheck"
+        app_id: str = "io.github.speakcheck"  # matches the desktop entry from `speakcheck desktop-entry`
 
     def __init__(self, *args: Any, **kwargs: Any):
         super().__init__(*args, **kwargs)

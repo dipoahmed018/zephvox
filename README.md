@@ -45,11 +45,11 @@ uv run speakcheck serve --open           # http://127.0.0.1:8765
 shortcuts and serves the page. The **browser never records**. It shows live feedback and lets you
 practise, and the engine does the recording.
 
-- **Record**: press **Ctrl+Alt+R** anywhere (or the big button), speak, press again. The page shows a
+- **Record**: press **Ctrl+Shift+Alt+R** anywhere (or the big button), speak, press again. The page shows a
   live level meter, then the analysis progress, then opens the report.
 - **Report**: your transcript with mistakes highlighted (teal = pronunciation, amber = grammar). Click
   one to hear your own word, hear it said correctly, practise it, or mark it "not a mistake".
-- **Practice**: hear the word, press **Ctrl+Alt+P** (or click) and say it. Recording stops by itself
+- **Practice**: hear the word, press **Ctrl+Shift+Alt+P** (or click) and say it. Recording stops by itself
   when you stop talking. You get a 0–100 score, every sound colored right or wrong, and a mouth tip.
   Repeat until it passes.
 - **History / Progress / Settings**: past sessions, your weakest words and sounds, microphone choice,
@@ -59,7 +59,7 @@ Shortcuts are a plugin kind too (`[providers] triggers`):
 
 | Driver | Where | Notes |
 |---|---|---|
-| `portal` | Linux (KDE Plasma, GNOME 48+, Hyprland; Wayland or X11) | The desktop asks once; rebind in system settings |
+| `portal` | Linux (KDE Plasma, GNOME 48+, Hyprland; Wayland or X11) | Run `speakcheck desktop-entry` once first, so the desktop files the shortcuts under "speakcheck" (not your terminal). The desktop asks once; rebind in system settings. |
 | `pynput` | Windows, macOS, Linux X11 | macOS asks for Accessibility permission |
 | any OS | — | Bind `speakcheck toggle` / `speakcheck practice` in your OS shortcut settings. Both talk to the running daemon. |
 
@@ -67,9 +67,9 @@ Change the suggested keys in `config.toml`:
 
 ```toml
 [shortcuts]
-toggle_recording = "Ctrl+Alt+R"
-practice_attempt = "Ctrl+Alt+P"
-cancel = "Ctrl+Alt+X"
+toggle_recording = "Ctrl+Shift+Alt+R"
+practice_attempt = "Ctrl+Shift+Alt+P"
+cancel = "Ctrl+Shift+Alt+X"
 ```
 
 Frontend development: `cd web && npm install && npm run dev` (Vite proxies `/api` to the daemon).
@@ -86,6 +86,7 @@ Frontend development: `cd web && npm install && npm run dev` (Vite proxies `/api
 | `speakcheck history` | your most frequent mistakes across sessions |
 | `speakcheck providers` | which drivers are available, and which is selected |
 | `speakcheck serve` | daemon + web GUI + global shortcuts |
+| `speakcheck desktop-entry` | Linux: add speakcheck to the app menu and give its shortcuts a proper name |
 | `speakcheck toggle` / `speakcheck practice` | start/stop a recording or practice attempt (uses the daemon when it runs) |
 
 When the daemon is running, `record`, `start`, `stop`, `toggle` and `practice` are forwarded to it.

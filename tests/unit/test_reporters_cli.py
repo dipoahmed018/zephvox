@@ -136,3 +136,13 @@ def test_cli_builds_engine_from_config(tmp_path, monkeypatch, capsys):
     argv = ["report", "--config", str(cfg), "--set", "stt=faster-whisper"]
     assert cli.main(argv, engine_factory=factory) == 1
     assert built[0].providers["stt"] == ["faster-whisper"]
+
+
+def test_cli_desktop_entry(run_cli, tmp_path, monkeypatch):
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    code, out, _ = run_cli("desktop-entry", "-q")
+    entry = tmp_path / "applications" / "io.github.speakcheck.desktop"
+    assert code == 0 and str(entry) in out
+    text = entry.read_text()
+    assert "Exec=" in text and "-m speakcheck.cli serve --open" in text
+    assert (tmp_path / "icons" / "io.github.speakcheck.svg").read_text().startswith("<svg")
