@@ -22,15 +22,13 @@ class SetupError(SpeakcheckError):
     pass
 
 
-ROLES = ("full", "client", "server")
+ROLES = ("full", "client")
 
 
 def extras_for(accelerator: str | None, role: str = "full") -> list[str]:
-    """full: everything; client: record here, analyze on a server (no PyTorch); server: no desktop parts."""
+    """full: everything (it can also serve other devices); client: record here, analyze on a server (no PyTorch)."""
     if role == "client":
         return ["desktop", "web"]
-    if role == "server":
-        return ["models", accelerator or "cpu", "web", "voice"]
     return ["models", accelerator or "cpu", *BASE_EXTRAS[1:]]
 
 
@@ -38,7 +36,7 @@ def extras_for(accelerator: str | None, role: str = "full") -> list[str]:
 class InstallState:
     accelerator: str | None = None
     extras: list[str] = field(default_factory=list)
-    role: str | None = None  # full | client | server
+    role: str | None = None  # full | client ("server" from older installs counts as full)
     version: str | None = None  # release installed by the bootstrap script or `update`
 
     @classmethod

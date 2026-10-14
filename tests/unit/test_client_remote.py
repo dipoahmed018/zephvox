@@ -246,7 +246,6 @@ class TestHelpers:
 
     def test_extras_per_role(self):
         assert extras_for("cuda", "client") == ["desktop", "web"]
-        assert extras_for("cuda", "server") == ["models", "cuda", "web", "voice"]
         assert extras_for("rocm") == ["models", "rocm", "desktop", "web", "voice"]
 
 

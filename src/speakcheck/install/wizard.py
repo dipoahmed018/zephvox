@@ -35,11 +35,6 @@ from .state import ROLES, InstallState, Runner, SetupError, extras_for, sync
 
 SELFTEST_CLIP = Path(__file__).resolve().parent.parent / "data" / "selftest.wav"
 STEPS = 7
-ROLE_CHOICES = [
-    ("full", "On this computer: record and analyze here (downloads the models)"),
-    ("client", "Use a speakcheck server: record here, analyze there (small install, needs an invite)"),
-    ("server", "Server only: analyze for other devices (no app menu entry or microphone)"),
-]
 
 
 class Console:
@@ -144,14 +139,12 @@ class Setup:
     # --- steps ----------------------------------------------------------------------------
 
     def choose_role(self) -> str:
-        state = InstallState.load(self.root)
+        """Full unless told otherwise: `--role client`, a `--server-url`, or an existing client install."""
         if role := getattr(self.args, "role", None):
             return role
-        default = state.role or "full"
-        if not self.console.interactive:
-            return default
-        self.console.say("\nHow will you use speakcheck?")
-        return self.console.choose("  Choose", ROLE_CHOICES, default)
+        if getattr(self.args, "server_url", None):
+            return "client"
+        return "client" if InstallState.load(self.root).role == "client" else "full"
 
     def choose_profile(self) -> str:
         say = self.console.say
@@ -437,40 +430,6 @@ class Setup:
 
     # --- server role ----------------------------------------------------------------------
 
-    def first_account(self, command: str) -> None:
-        """Offer to create the first account and an invite, so a device can connect right away."""
-        from ..server.db import Database
-        from ..server.service import server_dir
-
-        config = self._config()
-        db = Database(server_dir(config) / "server.db")
-        try:
-            if db.accounts() or not self.console.interactive:
-                if not db.accounts():
-                    self.console.say(f"Add accounts with:  {command} server accounts add <name>")
-                return
-            if not self.console.confirm("Create the first account now?"):
-                return
-            name = self.console.text("  Account name:", "me")
-            account = db.add_account(name, time.time())
-            code = db.add_invite(account.id, time.time(), 7 * 86400)
-            self.console.say(f"  Invite for '{name}' (one device, valid 7 days):  {code}")
-            self.console.say(f"  More invites:  {command} server invite {name}")
-        finally:
-            db.close()
-
-    def offer_service(self, command: str) -> None:
-        from ..server import os_service
-
-        if self.args.dry_run or not self.console.confirm("Run the server in the background, started with the computer?"):
-            self.console.say(f"Start it yourself with:  {command} server serve   (or later: {command} server install-service)")
-            return
-        cmd = os_service.command(self.python, self.config_path if self.config_path.exists() else None, None, None)
-        try:
-            self.console.say(f"  Installed: {os_service.install(cmd, self.root, self.run)}")
-        except (OSError, subprocess.CalledProcessError) as e:
-            self.console.say(f"  ! Couldn't install the service ({e}); run `{command} server serve` instead.")
-
     def run_all(self) -> int:
         say = self.console.say
         say("speakcheck setup")
@@ -516,16 +475,10 @@ class Setup:
                 "  Analyze on this computer from now on (instead of on the server)?"):  # fmt: skip
             self.set_remote({"mode": "local"})
         self.download(config, downloads, ollama_binary)
-        command = "speakcheck" if self.launcher(menu=role != "server") else "uv run speakcheck"
+        command = "speakcheck" if self.launcher() else "uv run speakcheck"
         ok = self.verify(accelerator)
 
         say("\nDone." if ok else "\nInstalled, with problems (see above).")
-        if role == "server":
-            self.first_account(command)
-            self.offer_service(command)
-            say(f"Run the server with:  {command} server serve --host 0.0.0.0   (put HTTPS in front of it)")
-            say(f"Use speakcheck on this computer too, later:  {command} setup --role full")
-            return 0 if ok else 1
         say(f"Start speakcheck from your app menu, or with:  {command} serve --open")
         say(f"Change profile any time:  {command} setup   (or in the page's settings)")
         if ok and self.console.interactive and self.console.confirm("Start speakcheck now?"):

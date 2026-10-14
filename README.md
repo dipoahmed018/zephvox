@@ -33,16 +33,19 @@ curl -LsSf https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/instal
 powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.ps1 | iex"
 ```
 
-The script installs [uv](https://docs.astral.sh/uv/) if needed, downloads speakcheck and starts `speakcheck setup`.
-It first asks how you'll use speakcheck:
+The script installs [uv](https://docs.astral.sh/uv/) if needed, downloads speakcheck and starts `speakcheck setup`,
+which installs the full app. To install only the small client instead (about 80 MB, no PyTorch or
+models: it records here and analyzes on a speakcheck server), pass the server's address and the invite
+code from its admin; see [Server mode](#server-mode):
 
-- **On this computer** (default): everything below.
-- **Use a speakcheck server**: a small install (about 80 MB, no PyTorch or models) that records here
-  and analyzes on a server. You need the server's address and an invite code from its admin; see
-  [Server mode](#server-mode).
-- **Server only**: the engine, for other devices to use. No app menu entry or microphone parts.
+```sh
+curl -LsSf https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.sh | sh -s -- --server-url https://speak.example.com --invite inv_...
+```
+```powershell
+$env:SPEAKCHECK_SETUP_ARGS = "--server-url https://speak.example.com --invite inv_..."; irm https://raw.githubusercontent.com/dipoahmed018/speakcheck/main/install.ps1 | iex
+```
 
-For "on this computer", setup:
+For the full app, setup:
 
 1. **detects your hardware**: CPU, RAM, GPU and its memory, free disk space;
 2. **recommends a profile** (below). Accept it or pick another;
@@ -290,7 +293,7 @@ speakcheck server serve --host 0.0.0.0                            # put HTTPS (C
 Each device redeems an invite for its own key (`POST /v1/devices/redeem`) and sends it as
 `Authorization: Bearer sk_...`. Keys are stored only as hashes and can be rotated or revoked.
 
-**On a device**, choose "use a speakcheck server" in setup, or run it directly:
+**On a device**, install the client (or add `--server-url …` to the one-line installer above):
 
 ```sh
 speakcheck setup --role client --server-url https://speak.example.com --invite inv_...
@@ -301,7 +304,7 @@ The app works as usual: recordings, history and reports stay on the device, and 
 runs on the server. Practice audio streams to the server while you speak, so the score arrives a
 moment after you stop. In the page's settings ("Where analysis runs") you can switch between the
 server and this computer. Choosing this computer on a client-only install offers to install the
-engine there, in the background. A server-only install adds the app with `speakcheck setup --role full`.
+engine there, in the background.
 
 **History sync** is on by default in client mode (a full install can turn it on in the same card):
 sessions, feedback, recordings and practice scores are backed up to the server under your account,
@@ -324,10 +327,9 @@ limits are under `[server]` in `config.example.toml`.
 
 ### Running a server
 
-**With the installer**: choose "server only" in setup (or `speakcheck setup --role server`). It
-installs the engine and models, offers to create the first account, and can install a background
-service that starts with the computer: a systemd user unit on Linux, a LaunchAgent on macOS, or a
-scheduled task on Windows. Do it later with `speakcheck server install-service`; undo it with
+**From a full install**: any full install can serve other devices. Run `speakcheck server serve`, or
+`speakcheck server install-service` for a background service that starts with the computer (a systemd
+user unit on Linux, a LaunchAgent on macOS, or a scheduled task on Windows); undo it with
 `speakcheck server remove-service`.
 
 **With Docker** (`docker/`): the speakcheck server plus Ollama.

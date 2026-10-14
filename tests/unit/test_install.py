@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from speakcheck import cli
 from speakcheck.engine import config as config_mod
 from speakcheck.engine import hardware, profiles
 from speakcheck.engine.config import (
@@ -324,17 +325,21 @@ class TestSetup:
         assert runner.ran("speakcheck.install.download") and runner.ran("selftest.wav")
         assert install_root.pulled == ["qwen3:8b"]
 
-    def test_server_role_and_switching_a_client_to_full(self, tmp_path, install_root):
-        runner = Recorder()
-        assert run_setup(tmp_path, runner, machine([nvidia(12)]), role="server") == 0
+    def test_a_server_address_means_client(self, tmp_path, install_root):
+        setup = wizard.Setup(setup_args(tmp_path, role=None, server_url="https://s.example"),
+                             wizard.Console(interactive=False, out=lambda text="": None), runner=Recorder(),
+                             detect=lambda r: machine([nvidia(12)]))  # fmt: skip
+        assert setup.choose_role() == "client"
+
+    def test_full_by_default_and_switching_a_client_to_full(self, tmp_path, install_root):
+        # No role given: the full app, without a question. An old server-only install becomes full too.
+        saved = state.InstallState(role="server")
+        saved.save(install_root.path)
+        assert run_setup(tmp_path, Recorder(), machine([nvidia(12)]), role=None) == 0
         saved = state.InstallState.load(install_root.path)
-        assert saved.role == "server" and saved.extras == ["models", "cuda", "web", "voice"]
-        (sync,) = runner.ran("uv sync")
-        assert "desktop" not in sync
-        if sys.platform.startswith("linux"):
-            unit = tmp_path / "home" / ".config" / "systemd" / "user" / "speakcheck-server.service"
-            assert unit.exists() and "server serve" in unit.read_text()
-            assert runner.ran("enable --now speakcheck-server")
+        assert saved.role == "full" and "desktop" in saved.extras
+        with pytest.raises(SystemExit):
+            cli._parser().parse_args(["setup", "--role", "server"])  # no server-only install any more
         # A client install becoming full: it offers to analyze locally (default yes).
         saved.role = "client"
         saved.save(install_root.path)

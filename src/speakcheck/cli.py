@@ -60,8 +60,8 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--no-launcher", action="store_true", help="don't add an app-menu entry")
     st.add_argument("--no-verify", action="store_true", help="skip the test analysis")
     st.add_argument("--dry-run", action="store_true", help="show what would be installed, change nothing")
-    st.add_argument("--role", choices=["full", "client", "server"],
-                    help="full: analyze here; client: use a server; server: analyze for other devices")  # fmt: skip
+    st.add_argument("--role", choices=["full", "client"],
+                    help="full (the default): record and analyze here; client: record here, analyze on a server")  # fmt: skip
     st.add_argument("--server-url", help="client: the server's address, e.g. https://speak.example.com")
     st.add_argument("--server-header", action="append", metavar="NAME=VALUE",
                     help="client: an extra header for every request (repeatable; ${VAR} reads .env)")  # fmt: skip
