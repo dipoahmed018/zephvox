@@ -204,7 +204,7 @@
                 <button class="copy" type="button" data-copy="full-unix"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
               </div>
               <div class="code" data-os="win" hidden>
-                <pre><code id="full-win">powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex"</code></pre>
+                <pre><code id="full-win">powershell -ExecutionPolicy ByPass -c "iex (irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | Out-String)"</code></pre>
                 <button class="copy" type="button" data-copy="full-win"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
               </div>
               <p class="aside">Run it in a terminal (PowerShell on Windows). Nothing else needs a system install.</p>
@@ -294,7 +294,7 @@
               </div>
               <div class="code" data-os="win" hidden>
                 <pre><code id="client-win">$env:ZEPHVOX_SETUP_ARGS = "--server-url https://speak.example.com --invite inv_..."
-irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex</code></pre>
+iex (irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | Out-String)</code></pre>
                 <button class="copy" type="button" data-copy="client-win"><svg class="icon"><use href="#i-copy"/></svg><span>Copy</span></button>
               </div>
               <p class="aside">It installs the small client (about 80&nbsp;MB), connects it to the server and adds it to your app menu.</p>

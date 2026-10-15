@@ -331,9 +331,9 @@ def create_server_app(server: Server) -> FastAPI:
         row, folder = db.synced(who.account.id, sid), session_dir(who, sid)
         if row is None or row["deleted"] or not (folder / "result.json").exists():
             raise HTTPException(404, "no such session")
-        feedback = json.loads((folder / "feedback.json").read_text()) if (folder / "feedback.json").exists() else {}
+        feedback = json.loads((folder / "feedback.json").read_text(encoding="utf-8")) if (folder / "feedback.json").exists() else {}
         return {"id": sid, "updated": row["updated"], "has_audio": bool(row["has_audio"]),
-                "result": json.loads((folder / "result.json").read_text()), "feedback": feedback}  # fmt: skip
+                "result": json.loads((folder / "result.json").read_text(encoding="utf-8")), "feedback": feedback}  # fmt: skip
 
     @app.put("/v1/sessions/{sid}")
     def put_session(sid: str, body: SessionBody, who: Caller = Depends(caller)) -> dict[str, Any]:
@@ -341,7 +341,7 @@ def create_server_app(server: Server) -> FastAPI:
         row = db.synced(who.account.id, sid)
         if row and not row["deleted"]:
             if row["origin"] != who.device.id and (folder / "result.json").exists():
-                stored = json.loads((folder / "result.json").read_text())
+                stored = json.loads((folder / "result.json").read_text(encoding="utf-8"))
                 if stored.get("created") != body.result.get("created"):
                     raise HTTPException(409, "id_taken: another device synced a different session with this id")
             if row["updated"] > body.updated:

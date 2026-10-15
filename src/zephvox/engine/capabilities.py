@@ -136,7 +136,7 @@ def detect_gpu() -> GPUInfo | None:
 
 def detect_ram_gb(meminfo: Path = Path("/proc/meminfo")) -> float:
     try:
-        for line in meminfo.read_text().splitlines():
+        for line in meminfo.read_text(encoding="utf-8").splitlines():
             if line.startswith("MemTotal:"):
                 return int(line.split()[1]) / 1024 / 1024
     except OSError:

@@ -42,13 +42,13 @@ class InstallState:
     @classmethod
     def load(cls, root: Path) -> InstallState:
         try:
-            data = json.loads((root / STATE_FILE).read_text())
+            data = json.loads((root / STATE_FILE).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return cls()
         return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
     def save(self, root: Path) -> None:
-        (root / STATE_FILE).write_text(json.dumps(asdict(self), indent=2) + "\n")
+        (root / STATE_FILE).write_text(json.dumps(asdict(self), indent=2) + "\n", encoding="utf-8")
 
 
 def is_checkout(root: Path) -> bool:

@@ -50,9 +50,9 @@ def install(python: str | None = None) -> Path:
     apps.mkdir(parents=True, exist_ok=True)
     icon = apps.parent / "icons" / f"{APP_ID}.svg"
     icon.parent.mkdir(parents=True, exist_ok=True)
-    icon.write_text(ICON_SVG)
+    icon.write_text(ICON_SVG, encoding="utf-8")
     path = apps / f"{APP_ID}.desktop"
-    path.write_text(desktop_entry(python or sys.executable, icon))
+    path.write_text(desktop_entry(python or sys.executable, icon), encoding="utf-8")
     _remove_legacy()
     return path
 
@@ -126,9 +126,9 @@ def install_mac(python: str) -> Path:
     app = mac_app_path()
     macos = app / "Contents" / "MacOS"
     macos.mkdir(parents=True, exist_ok=True)
-    (app / "Contents" / "Info.plist").write_text(mac_info_plist())
+    (app / "Contents" / "Info.plist").write_text(mac_info_plist(), encoding="utf-8")
     launcher = macos / "zephvox"
-    launcher.write_text(f"#!/bin/sh\nexec {shlex.quote(python)} -m zephvox.cli serve --open\n")
+    launcher.write_text(f"#!/bin/sh\nexec {shlex.quote(python)} -m zephvox.cli serve --open\n", encoding="utf-8")
     launcher.chmod(0o755)
     return app
 
@@ -173,7 +173,7 @@ def install_command(python: str | None = None) -> Path:
         shim.unlink()
     _remove_legacy_command()  # the command the app had before; it no longer works
     if os.name == "nt":
-        shim.write_text(f'@"{scripts / "zephvox.exe"}" %*\r\n')
+        shim.write_text(f'@"{scripts / "zephvox.exe"}" %*\r\n', encoding="utf-8")
     else:
         shim.symlink_to(scripts / "zephvox")
     return shim
@@ -189,7 +189,7 @@ def _remove_legacy_command() -> None:
     try:
         ours = shim.is_symlink() and shim.resolve().name == "speakcheck"
         if os.name == "nt" and shim.exists():
-            ours = "speakcheck.exe" in shim.read_text()
+            ours = "speakcheck.exe" in shim.read_text(encoding="utf-8")
         if ours:
             shim.unlink()
     except OSError:

@@ -101,7 +101,7 @@ def _emit_report(engine: Engine, result: AnalysisResult, args: argparse.Namespac
     text = reporter.render(result)
     print(text, end="")
     if args.output:
-        args.output.write_text(text)
+        args.output.write_text(text, encoding="utf-8")
 
 
 def _analyzers(args: argparse.Namespace) -> list[str] | None:
@@ -244,6 +244,9 @@ def run(args: argparse.Namespace, engine: Engine, ask: Callable[[str], str]) -> 
 
 def main(argv: list[str] | None = None, engine_factory: EngineFactory = Engine,
          ask: Callable[[str], str] = input) -> int:  # fmt: skip
+    for stream in (sys.stdout, sys.stderr):  # Windows defaults to cp1252, which can't print IPA
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     args = _parser().parse_args(argv)
     load_env()  # before anything imports torch: GPU workarounds are read at import time
     if args.command == "setup":  # these work before (or after) the engine can run

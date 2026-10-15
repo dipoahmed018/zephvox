@@ -39,14 +39,14 @@ class PracticeStore:
 
     def add(self, attempt: PracticeAttempt) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
-        with self.log_path.open("a") as f:
+        with self.log_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(attempt.to_dict(), ensure_ascii=False) + "\n")
 
     def attempts(self, target: str | None = None) -> list[PracticeAttempt]:
         if not self.log_path.exists():
             return []
         out = []
-        for line in self.log_path.read_text().splitlines():
+        for line in self.log_path.read_text(encoding="utf-8").splitlines():
             if not line.strip():
                 continue
             attempt = PracticeAttempt(**json.loads(line))

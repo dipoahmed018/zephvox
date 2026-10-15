@@ -69,7 +69,7 @@ def custom_path(config_path: Path) -> Path:
 
 def load_custom(path: Path) -> dict[str, Any]:
     try:
-        return tomllib.loads(Path(path).read_text())
+        return tomllib.loads(Path(path).read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
     except (OSError, tomllib.TOMLDecodeError) as e:
@@ -79,7 +79,7 @@ def load_custom(path: Path) -> dict[str, Any]:
 def save_custom(path: Path, overlay: dict[str, Any]) -> None:
     header = "# Your custom profile, written by `zephvox setup` (run it again to change it).\n"
     header += "# Settings in config.toml still win over these.\n\n"
-    Path(path).write_text(header + dump_toml(overlay))
+    Path(path).write_text(header + dump_toml(overlay), encoding="utf-8")
 
 
 def custom(overlay: dict[str, Any]) -> Profile:

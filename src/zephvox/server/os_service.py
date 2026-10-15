@@ -90,7 +90,7 @@ def install(cmd: list[str], workdir: Path, runner: Runner = subprocess.run, plat
     if platform.startswith("linux"):
         path = systemd_path(home)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(systemd_unit(cmd, workdir))
+        path.write_text(systemd_unit(cmd, workdir), encoding="utf-8")
         runner(["systemctl", "--user", "daemon-reload"], check=True)
         runner(["systemctl", "--user", "enable", "--now", NAME], check=True)
         linger = runner(["loginctl", "show-user", os.environ.get("USER", ""), "--property=Linger"],
@@ -103,7 +103,7 @@ def install(cmd: list[str], workdir: Path, runner: Runner = subprocess.run, plat
         path = launchd_path(home)
         path.parent.mkdir(parents=True, exist_ok=True)
         log = (home or Path.home()) / "Library" / "Logs" / f"{NAME}.log"
-        path.write_text(launchd_plist(cmd, workdir, log))
+        path.write_text(launchd_plist(cmd, workdir, log), encoding="utf-8")
         runner(["launchctl", "unload", str(path)], check=False, capture_output=True)
         runner(["launchctl", "load", "-w", str(path)], check=True)
         return f"LaunchAgent {path} (logs: {log})"

@@ -170,7 +170,7 @@ def docs_from_example(path: Path | None) -> dict[str, str]:
         return {}
     docs: dict[str, str] = {}
     section: list[str] = []
-    for raw in path.read_text().splitlines():
+    for raw in path.read_text(encoding="utf-8").splitlines():
         line = raw.strip()
         if line.startswith("["):
             name, _, comment = line.partition("]")
@@ -287,7 +287,7 @@ def read_file(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
         return {}
     try:
-        return tomllib.loads(path.read_text())
+        return tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError:
         return {}
 

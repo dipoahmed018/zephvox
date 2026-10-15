@@ -294,7 +294,7 @@ class Setup:
         env = self.root / ".env"
         say(f"  PyTorch can't use the AMD GPU as-is ({gpu.gfx}); HSA_OVERRIDE_GFX_VERSION={override} usually fixes it.")
         if self.console.confirm(f"  Add it to {env}?"):
-            with env.open("a") as f:
+            with env.open("a", encoding="utf-8") as f:
                 f.write(f"\n# Added by zephvox setup for {gpu.name} ({gpu.gfx})\nHSA_OVERRIDE_GFX_VERSION={override}\n")
             if not self.gpu_works():
                 say("  ! Still not working: check your user is in the render and video groups.")
@@ -316,7 +316,7 @@ class Setup:
         started = time.monotonic()
         cmd = [self.python, "-m", "zephvox.cli", "analyze", str(SELFTEST_CLIP), "-q", "--format", "json",
                "--config", str(self.config_path)]
-        proc = self.run(cmd, check=False, capture_output=True, text=True)
+        proc = self.run(cmd, check=False, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if proc.returncode == 0:
             say(f"  Test analysis: OK ({time.monotonic() - started:.0f} s)")
             return True

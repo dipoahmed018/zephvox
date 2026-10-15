@@ -52,7 +52,7 @@ class JobRunner:
 
     def result(self, job_id: str) -> dict[str, Any] | None:
         path = self.job_dir(job_id) / "result.json"
-        return json.loads(path.read_text()) if path.exists() else None
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     # --- queue --------------------------------------------------------------------------
 
@@ -130,7 +130,7 @@ class JobRunner:
             result = self.engine.analyze(self.audio_path(job), job.analyzers or None, save=False)
             data = result.to_dict()
             data["audio_path"] = ""  # a path on the server means nothing to the client
-            (self.job_dir(job_id) / "result.json").write_text(json.dumps(data, ensure_ascii=False))
+            (self.job_dir(job_id) / "result.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
             update: dict[str, Any] = {"status": "done", "error": None}
         except Exception as e:  # any failure belongs to this job, not the server
             update = {"status": "failed", "error": str(e) or type(e).__name__}

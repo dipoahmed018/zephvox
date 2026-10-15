@@ -51,7 +51,7 @@ def project_root(package_dir: Path = Path(__file__).resolve().parents[1]) -> Pat
     root = package_dir.parent.parent  # <root>/src/zephvox
     pyproject = root / "pyproject.toml"
     try:
-        return root if 'name = "zephvox"' in pyproject.read_text() else None
+        return root if 'name = "zephvox"' in pyproject.read_text(encoding="utf-8") else None
     except OSError:
         return None
 
@@ -136,7 +136,7 @@ def load_env(dirs: list[Path] | None = None) -> list[Path]:
     for d in config_dirs() if dirs is None else dirs:
         path = d / ".env"
         try:
-            values = parse_env(path.read_text())
+            values = parse_env(path.read_text(encoding="utf-8"))
         except OSError:
             continue
         for key, value in values.items():
@@ -275,7 +275,7 @@ def load_config(path: Path | None = None, page: bool = True) -> Config:
     data: dict[str, Any] = {}
     if path.exists():
         try:
-            data = tomllib.loads(path.read_text())
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
         except tomllib.TOMLDecodeError as e:
             raise ConfigError(f"Invalid TOML in {path}: {e}") from e
     elif explicit:
@@ -320,15 +320,15 @@ def write_profile(path: Path, name: str, template: Path | None = None) -> None:
     profiles.get(name, path)  # validate
     line = f'profile = "{name}"'
     if path.exists():
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     else:
-        text = template.read_text() if template and template.exists() else ""
+        text = template.read_text(encoding="utf-8") if template and template.exists() else ""
     head, sep, rest = text.partition("\n[")  # a top-level key must come before the first table
     if PROFILE_LINE.search(head):
         head = PROFILE_LINE.sub(line, head, count=1)
     else:
         head = f"{line}   # chosen by `zephvox setup`: {', '.join([*profiles.PROFILES, profiles.CUSTOM])}\n\n{head}"
-    path.write_text(head + sep + rest)
+    path.write_text(head + sep + rest, encoding="utf-8")
 
 
 def choose_profile(path: Path, name: str, template: Path | None = None) -> None:
@@ -351,7 +351,7 @@ def choose_profile(path: Path, name: str, template: Path | None = None) -> None:
 def load_user_settings(data_dir: Path) -> dict[str, Any]:
     path = Path(data_dir) / USER_SETTINGS_FILE
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
     except (OSError, ValueError) as e:
@@ -361,7 +361,7 @@ def load_user_settings(data_dir: Path) -> dict[str, Any]:
 
 def save_user_settings(data_dir: Path, settings: dict[str, Any]) -> None:
     Path(data_dir).mkdir(parents=True, exist_ok=True)
-    (Path(data_dir) / USER_SETTINGS_FILE).write_text(json.dumps(settings, indent=2))
+    (Path(data_dir) / USER_SETTINGS_FILE).write_text(json.dumps(settings, indent=2), encoding="utf-8")
 
 
 def apply_user_settings(config: Config, settings: dict[str, Any]) -> Config:

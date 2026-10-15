@@ -26,7 +26,7 @@ def _alive(pid: int) -> bool:
         return True
     # A zombie still "exists"; treat it as finished.
     try:
-        return Path(f"/proc/{pid}/stat").read_text().split()[2] != "Z"
+        return Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").split()[2] != "Z"
     except OSError:
         return False
 

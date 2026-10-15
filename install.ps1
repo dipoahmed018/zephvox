@@ -1,6 +1,6 @@
 # zephvox installer for Windows. Also updates an existing install.
 #
-#   powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex"
+#   powershell -ExecutionPolicy ByPass -c "iex (irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | Out-String)"
 #
 # Environment: ZEPHVOX_DIR (default %LOCALAPPDATA%\zephvox), ZEPHVOX_VERSION (a release tag;
 # default latest), ZEPHVOX_SETUP_ARGS (passed to `zephvox setup`, e.g. "--profile cpu --yes").

@@ -24,7 +24,7 @@ def daemon_file(data_dir: Path) -> Path:
 
 def write_daemon_file(data_dir: Path, url: str) -> None:
     Path(data_dir).mkdir(parents=True, exist_ok=True)
-    daemon_file(data_dir).write_text(json.dumps({"url": url, "pid": os.getpid()}))
+    daemon_file(data_dir).write_text(json.dumps({"url": url, "pid": os.getpid()}), encoding="utf-8")
 
 
 def remove_daemon_file(data_dir: Path) -> None:
@@ -44,7 +44,7 @@ def daemon_at(url: str, transport: httpx.BaseTransport | None = None) -> bool:
 def find_daemon(data_dir: Path, transport: httpx.BaseTransport | None = None) -> str | None:
     """URL of a live daemon for this data dir, or None."""
     try:
-        info = json.loads(daemon_file(data_dir).read_text())
+        info = json.loads(daemon_file(data_dir).read_text(encoding="utf-8"))
         url = info["url"]
     except (OSError, ValueError, KeyError):
         return None

@@ -110,9 +110,9 @@ def amd_gpus(drm: Path = Path("/sys/class/drm"), rocminfo: str | None = None) ->
     for card in sorted(drm.glob("card[0-9]*")):
         device = card / "device"
         try:
-            if (device / "vendor").read_text().strip() != AMD_VENDOR_ID:
+            if (device / "vendor").read_text(encoding="utf-8").strip() != AMD_VENDOR_ID:
                 continue
-            vram = int((device / "mem_info_vram_total").read_text()) / 1024**3
+            vram = int((device / "mem_info_vram_total").read_text(encoding="utf-8")) / 1024**3
         except (OSError, ValueError):
             continue
         if vram < MIN_GPU_VRAM_GB:
@@ -174,7 +174,7 @@ def detect_gpus(ram_gb: float) -> list[GPU]:
 def cpu_name() -> str:
     if sys.platform.startswith("linux"):
         try:
-            for line in Path("/proc/cpuinfo").read_text().splitlines():
+            for line in Path("/proc/cpuinfo").read_text(encoding="utf-8").splitlines():
                 if line.startswith("model name"):
                     return line.split(":", 1)[1].strip()
         except OSError:

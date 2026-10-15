@@ -30,7 +30,7 @@ def same_server(a: str | None, b: str | None) -> bool:
 def load(data_dir: Path, url: str | None = None) -> Credentials | None:
     """The saved key; with `url`, only if it belongs to that server."""
     try:
-        data = json.loads((Path(data_dir) / FILE).read_text())
+        data = json.loads((Path(data_dir) / FILE).read_text(encoding="utf-8"))
         creds = Credentials(**{k: data.get(k, "") for k in Credentials.__dataclass_fields__})
     except (OSError, ValueError, TypeError):
         return None
@@ -44,7 +44,7 @@ def save(data_dir: Path, creds: Credentials) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "w") as f:
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(asdict(creds), f, indent=2)
     os.replace(tmp, path)
 

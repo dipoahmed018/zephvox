@@ -62,7 +62,7 @@ curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.s
 ```
 ```powershell
 # Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex"
+powershell -ExecutionPolicy ByPass -c "iex (irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | Out-String)"
 ```
 
 The script installs [uv](https://docs.astral.sh/uv/) if needed, downloads zephvox and starts
@@ -90,7 +90,7 @@ curl -LsSf https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.s
 ```
 ```powershell
 $env:ZEPHVOX_SETUP_ARGS = "--server-url https://speak.example.com --invite inv_..."
-irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | iex
+iex (irm https://raw.githubusercontent.com/dipoahmed018/zephvox/main/install.ps1 | Out-String)
 ```
 
 The app works exactly as the full one: recordings, history and reports stay on your device, and only

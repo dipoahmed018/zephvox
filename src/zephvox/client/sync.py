@@ -44,23 +44,23 @@ class SyncState:
     @classmethod
     def load(cls, data_dir: Path) -> SyncState:
         try:
-            data = json.loads((Path(data_dir) / STATE_FILE).read_text())
+            data = json.loads((Path(data_dir) / STATE_FILE).read_text(encoding="utf-8"))
             return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
         except (OSError, ValueError, TypeError):
             return cls()
 
     def save(self, data_dir: Path) -> None:
         Path(data_dir).mkdir(parents=True, exist_ok=True)
-        (Path(data_dir) / STATE_FILE).write_text(json.dumps(asdict(self)))
+        (Path(data_dir) / STATE_FILE).write_text(json.dumps(asdict(self)), encoding="utf-8")
 
 
 def mark_pending(session: Session, analyzers: list[str] | None) -> None:
-    (session.dir / PENDING_FILE).write_text(json.dumps({"analyzers": analyzers, "since": time.time()}))
+    (session.dir / PENDING_FILE).write_text(json.dumps({"analyzers": analyzers, "since": time.time()}), encoding="utf-8")
 
 
 def pending(session: Session) -> dict[str, Any] | None:
     try:
-        return json.loads((session.dir / PENDING_FILE).read_text())
+        return json.loads((session.dir / PENDING_FILE).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
 
@@ -156,9 +156,9 @@ class SyncWorker:
             session = local[sid]
             updated = version(session)
             if abs(state.known.get(sid, -1) - updated) > SAME:
-                result = json.loads(session.result_path.read_text())
+                result = json.loads(session.result_path.read_text(encoding="utf-8"))
                 result["audio_path"] = ""
-                feedback = json.loads(session.feedback_path.read_text()) if session.feedback_path.exists() else {}
+                feedback = json.loads(session.feedback_path.read_text(encoding="utf-8")) if session.feedback_path.exists() else {}
                 try:
                     client.put_session(sid, updated, result, feedback)
                 except ServerError as e:
@@ -221,8 +221,8 @@ class SyncWorker:
             session.audio_path.write_bytes(client.get_audio(sid))
             state.audio.append(sid)
         result = {**data["result"], "session_id": sid, "audio_path": str(session.audio_path)}
-        session.result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2))
-        session.feedback_path.write_text(json.dumps(data.get("feedback") or {}))
+        session.result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        session.feedback_path.write_text(json.dumps(data.get("feedback") or {}), encoding="utf-8")
         updated = data["updated"]
         for path in (session.result_path, session.feedback_path):
             os.utime(path, (updated, updated))  # this version is now the same on both sides
@@ -235,9 +235,9 @@ class SyncWorker:
         session.dir.rename(new_dir)
         renamed = Session(new_id, new_dir)
         if renamed.result_path.exists():
-            result = json.loads(renamed.result_path.read_text())
+            result = json.loads(renamed.result_path.read_text(encoding="utf-8"))
             result.update(session_id=new_id, audio_path=str(renamed.audio_path))
-            renamed.result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2))
+            renamed.result_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         return renamed
 
     # --- practice -----------------------------------------------------------------------

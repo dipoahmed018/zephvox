@@ -217,7 +217,7 @@ class TestCapabilities:
 
     def test_ram_from_os_when_no_proc(self, monkeypatch):
         monkeypatch.setattr(capabilities, "_ram_from_os", lambda: 8.0)
-        monkeypatch.setattr(capabilities.Path, "read_text", lambda self: (_ for _ in ()).throw(OSError()))
+        monkeypatch.setattr(capabilities.Path, "read_text", lambda self, **kw: (_ for _ in ()).throw(OSError()))
         assert detect_ram_gb() == 8.0
 
     def test_which_searches_installer_folders(self, monkeypatch, tmp_path):

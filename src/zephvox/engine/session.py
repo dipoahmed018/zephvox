@@ -57,12 +57,17 @@ class SessionStore:
         return [Session(p.name, p) for p in sorted(self.root.iterdir()) if p.is_dir()]
 
     def save_result(self, session: Session, result: AnalysisResult) -> None:
-        session.result_path.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))
+        tmp = session.result_path.with_name(session.result_path.name + ".tmp")  # never leave a half-written result
+        tmp.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(session.result_path)
 
     def load_result(self, session: Session) -> AnalysisResult | None:
         if not session.result_path.exists():
             return None
-        data: dict[str, Any] = json.loads(session.result_path.read_text())
+        try:
+            data: dict[str, Any] = json.loads(session.result_path.read_text(encoding="utf-8"))
+        except ValueError:  # empty or truncated by an earlier failed write
+            return None
         return AnalysisResult.from_dict(data)
 
     def delete(self, session: Session) -> None:
@@ -72,7 +77,7 @@ class SessionStore:
         """User verdicts on findings, by index in `result.findings` (e.g. {3: "dismissed"})."""
         if not session.feedback_path.exists():
             return {}
-        return {int(k): v for k, v in json.loads(session.feedback_path.read_text()).items()}
+        return {int(k): v for k, v in json.loads(session.feedback_path.read_text(encoding="utf-8")).items()}
 
     def set_feedback(self, session: Session, index: int, verdict: str | None) -> dict[int, str]:
         feedback = self.load_feedback(session)
@@ -80,5 +85,5 @@ class SessionStore:
             feedback.pop(index, None)
         else:
             feedback[index] = verdict
-        session.feedback_path.write_text(json.dumps({str(k): v for k, v in sorted(feedback.items())}))
+        session.feedback_path.write_text(json.dumps({str(k): v for k, v in sorted(feedback.items())}), encoding="utf-8")
         return feedback

@@ -184,14 +184,14 @@ class Engine:
             meta=dict(meta or {}),
         )
         self.config.engine.data_dir.mkdir(parents=True, exist_ok=True)
-        self._recording_state.write_text(json.dumps({**recording.to_dict(), "handle": handle}))
+        self._recording_state.write_text(json.dumps({**recording.to_dict(), "handle": handle}), encoding="utf-8")
         self.events.emit("recording_started", **recording.to_dict())
         return recording
 
     def _load_recording(self) -> tuple[Recording, dict[str, Any], CaptureProvider]:
         if not self.is_recording():
             raise RecordingError("Not recording")
-        state = json.loads(self._recording_state.read_text())
+        state = json.loads(self._recording_state.read_text(encoding="utf-8"))
         handle = state.pop("handle")
         recording = Recording(**state)
         # Use the provider that started it (it holds in-process streams), even if preferences changed.
